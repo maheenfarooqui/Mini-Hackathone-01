@@ -18,12 +18,20 @@ export async function verifyToken(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, getJwtSecret());
-    const user = await userModel.findById(decoded.id).select("-password");
+    const user = await userModel
+      .findById(decoded.id)
+      .select("-password +username");
 
     if (!user) {
       return res.status(401).json({
         message: "User account is no longer available.",
       });
+    }
+
+    if (!user.name || user.role === "user") {
+      user.name = user.name || user.username || user.email.split("@")[0];
+      if (user.role === "user") user.role = "salesRepresentative";
+      await user.save();
     }
 
     req.user = {

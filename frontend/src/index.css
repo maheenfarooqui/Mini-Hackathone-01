@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #111b20;
+  --color-panel: #18242b;
+  --color-card: #202b32;
+  --color-line: #354149;
+  --color-orange: #ff5a0a;
+  --color-copy: #f4f5f6;
+  --color-muted: #a7b0b5;
+  --font-sans: "Inter", "Segoe UI", sans-serif;
+}
+
+:root {
+  font-family: Inter, "Segoe UI", sans-serif;
+  color: #f4f5f6;
+  background: #111b20;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #111b20;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  color: white;
+  background: #ff5a0a;
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #354149 transparent;
+}
+
+.glass {
+  background: rgb(24 36 43 / 78%);
+  backdrop-filter: blur(18px);
+}
+
+.hero-grid {
+  background-image:
+    linear-gradient(rgb(255 255 255 / 3%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 3%) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to bottom, black, transparent 90%);
+}
+
+.hero-photo {
+  background-image:
+    linear-gradient(90deg, #111b20 3%, rgb(17 27 32 / 78%) 46%, rgb(17 27 32 / 20%) 100%),
+    linear-gradient(0deg, #111b20 0%, transparent 54%),
+    url("https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=2200&q=85");
+  background-position: center, center, center;
+  background-size: cover;
+}
+
+@media (max-width: 767px) {
+  .hero-photo {
+    background-image:
+      linear-gradient(90deg, rgb(17 27 32 / 90%), rgb(17 27 32 / 67%)),
+      linear-gradient(0deg, #111b20, transparent 90%),
+      url("https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1200&q=80");
+  }
+}

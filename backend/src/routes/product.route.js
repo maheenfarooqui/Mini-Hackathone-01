@@ -1,26 +1,32 @@
 import express from "express";
 import {
-  addProduct,
-  fetchProduct,
-  fetchSingleProduct,
-  updateProduct,
+  createProduct,
   deleteProduct,
+  getProduct,
+  listProducts,
+  updateProduct,
 } from "../controllers/product.controller.js";
-import { verifyToken, adminOnly } from "../middlewares/auth.middleware.js";
-import upload from "../middlewares/upload.middleware.js";
+import {
+  adminOnly,
+  allowRoles,
+  verifyToken,
+} from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
-router.post(
-  "/create",
-  verifyToken,
-  adminOnly,
-  upload.single("image"),
-  addProduct,
+router.use(verifyToken);
+router.get(
+  "/",
+  allowRoles("admin", "warehouseManager", "supplier", "salesRepresentative"),
+  listProducts,
 );
-router.put("/edit/:id", verifyToken, adminOnly,upload.single("image"), updateProduct);
-router.delete("/delete/:id", verifyToken, adminOnly, deleteProduct);
-router.get("/fetch", fetchProduct);
-router.get("/fetch/:id", fetchSingleProduct);
+router.get(
+  "/:id",
+  allowRoles("admin", "warehouseManager", "supplier", "salesRepresentative"),
+  getProduct,
+);
+router.post("/", adminOnly, createProduct);
+router.put("/:id", adminOnly, updateProduct);
+router.delete("/:id", adminOnly, deleteProduct);
 
 export default router;

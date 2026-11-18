@@ -1,30 +1,35 @@
-
 import express from "express";
 import {
+  cancelOrder,
   createOrder,
-  getMyOrders,
-  getAllOrders,
+  getOrder,
+  listOrders,
   updateOrderStatus,
 } from "../controllers/order.controller.js";
-
 import {
+  allowRoles,
   verifyToken,
-  adminOnly,
 } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
 
-// Customer routes
-router.post("/create", verifyToken, createOrder);
-router.get("/my-orders", verifyToken, getMyOrders);
-
-// Admin routes
-router.get("/admin/all", verifyToken, adminOnly, getAllOrders);
+router.use(verifyToken);
+router.post("/", allowRoles("salesRepresentative"), createOrder);
+router.get(
+  "/",
+  allowRoles("admin", "warehouseManager", "salesRepresentative"),
+  listOrders,
+);
+router.get(
+  "/:id",
+  allowRoles("admin", "warehouseManager", "salesRepresentative"),
+  getOrder,
+);
+router.patch("/:id/status", allowRoles("admin", "warehouseManager"), updateOrderStatus);
 router.patch(
-  "/admin/:id/status",
-  verifyToken,
-  adminOnly,
-  updateOrderStatus
+  "/:id/cancel",
+  allowRoles("admin", "warehouseManager", "salesRepresentative"),
+  cancelOrder,
 );
 
 export default router;

@@ -1,261 +1,330 @@
+import mongoose from "mongoose";
 import productModel from "../models/product.model.js";
-import uploadFile from "../../services/storage.service.js";
+import stockModel from "../models/stock.model.js";
+import stockTransactionModel from "../models/stockTransaction.model.js";
+import userModel from "../models/user.model.js";
+import orderModel from "../models/order.model.js";
+import supplyRequestModel from "../models/supplyRequest.model.js";
+import { verifyImageKitAsset } from "../../services/storage.service.js";
+import { assignedWarehouseIds, hasWarehouseAccess } from "../utils/warehouseAccess.js";
+import {
+  isNonNegativeInteger,
+  isNonNegativeNumber,
+} from "../utils/validation.js";
 
-async function fetchProduct(req, res) {
+async function validateSupplier(supplierId) {
+  if (!supplierId) return { supplier: null };
+  if (!mongoose.isValidObjectId(supplierId)) {
+    return { error: "Invalid supplier ID.", status: 400 };
+  }
+
+  const supplier = await userModel.findOne({
+    _id: supplierId,
+    role: "supplier",
+  });
+  return supplier
+    ? { supplier: supplier._id }
+    : { error: "Supplier not found.", status: 404 };
+}
+
+export async function listProducts(req, res) {
   try {
-    const products = await productModel.find().sort({ createdAt: -1 });
+    const filter = { sku: { $exists: true } };
+    if (req.user.role === "supplier") filter.supplier = req.user.id;
+    if (req.query.category) filter.category = req.query.category;
+    if (req.query.supplier && req.user.role === "admin") {
+      if (!mongoose.isValidObjectId(req.query.supplier)) {
+        return res.status(400).json({ message: "Invalid supplier ID." });
+      }
+      filter.supplier = req.query.supplier;
+    }
+    if (req.query.q) {
+      const search = String(req.query.q).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { sku: { $regex: search, $options: "i" } },
+        { category: { $regex: search, $options: "i" } },
+      ];
+    }
 
-    return res.status(200).json({
-      success: true,
-      count: products.length,
-      products,
+    let warehouseFilter;
+    if (req.query.warehouse) {
+      if (!mongoose.isValidObjectId(req.query.warehouse)) {
+        return res.status(400).json({ message: "Invalid warehouse ID." });
+      }
+      if (
+        req.user.role === "warehouseManager" &&
+        !hasWarehouseAccess(req.user, req.query.warehouse)
+      ) {
+        return res.status(403).json({ message: "You are not assigned to this warehouse." });
+      }
+      warehouseFilter = req.query.warehouse;
+    } else if (req.user.role === "warehouseManager") {
+      warehouseFilter = { $in: assignedWarehouseIds(req.user) };
+    }
+
+    const products = await productModel
+      .find(filter)
+      .populate("supplier", "name email")
+      .sort({ createdAt: -1 })
+      .lean();
+    const stockFilter = { product: { $in: products.map((product) => product._id) } };
+    if (warehouseFilter) stockFilter.warehouse = warehouseFilter;
+    const stocks = products.length && req.user.role !== "supplier"
+      ? await stockModel
+          .find(stockFilter)
+          .populate("warehouse", "name location")
+          .lean()
+      : [];
+    const stockByProduct = new Map();
+    for (const stock of stocks) {
+      const key = stock.product.toString();
+      const entry = stockByProduct.get(key) || { quantity: 0, inventory: [] };
+      entry.quantity += stock.quantity;
+      entry.inventory.push({
+        warehouse: stock.warehouse,
+        quantity: stock.quantity,
+      });
+      stockByProduct.set(key, entry);
+    }
+
+    let result = products.map((product) => {
+      if (req.user.role === "supplier") return product;
+      return {
+        ...product,
+        quantity: stockByProduct.get(product._id.toString())?.quantity || 0,
+        inventory: stockByProduct.get(product._id.toString())?.inventory || [],
+      };
     });
+    if (req.query.available === "true") {
+      result = result.filter((product) => product.quantity > 0);
+    }
+
+    return res.status(200).json({ count: result.length, products: result });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch products",
-    });
+    console.error("List products error:", error);
+    return res.status(500).json({ message: "Unable to fetch products." });
   }
 }
 
-async function addProduct(req, res) {
-  console.log(req.file);
-
+export async function getProduct(req, res) {
   try {
-    if (!req.file) {
-      return res.status(400).json({
-        message: "Image is required",
-      });
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid product ID." });
     }
-    console.log("1. CREATE PRODUCT API CALLED");
-    console.log("2. Request body:", req.body);
-    console.log("3. Image received:", !!req.file);
+    const product = await productModel
+      .findOne({ _id: req.params.id, sku: { $exists: true } })
+      .populate("supplier", "name email");
+    if (!product) {
+      return res.status(404).json({ message: "Product not found." });
+    }
+    if (
+      req.user.role === "supplier" &&
+      product.supplier?._id.toString() !== req.user.id
+    ) {
+      return res.status(404).json({ message: "Product not found." });
+    }
 
-    const { name, slug, price, weight, description, stock } = req.body;
+    const stocks = await stockModel
+      .find({ product: product._id })
+      .populate("warehouse", "name location");
+    const visibleStocks =
+      req.user.role === "warehouseManager"
+        ? stocks.filter((stock) =>
+            hasWarehouseAccess(req.user, stock.warehouse._id),
+          )
+        : req.user.role === "supplier"
+          ? []
+          : stocks;
+
+    const productResponse = product.toObject();
+    if (req.user.role !== "supplier") {
+      productResponse.quantity = visibleStocks.reduce(
+        (sum, stock) => sum + stock.quantity,
+        0,
+      );
+      productResponse.inventory = visibleStocks;
+    }
+    return res.status(200).json({ product: productResponse });
+  } catch (error) {
+    console.error("Get product error:", error);
+    return res.status(500).json({ message: "Unable to fetch product." });
+  }
+}
+
+export async function createProduct(req, res) {
+  try {
+    const body = req.body || {};
+    const {
+      name,
+      description = "",
+      sku,
+      category,
+      price,
+      lowStockLimit,
+      supplier: supplierId,
+      imageUrl,
+      imageFileId,
+    } = body;
 
     if (
-      !name ||
-      !slug ||
-      price === undefined ||
-      price === "" ||
-      !weight ||
-      !description ||
-      stock === undefined ||
-      stock === ""
+      ![name, sku, category].every(
+        (value) => typeof value === "string" && value.trim(),
+      ) ||
+      !isNonNegativeNumber(price) ||
+      !isNonNegativeInteger(lowStockLimit)
     ) {
       return res.status(400).json({
-        message: "All product fields are required",
-      });
-    }
-    console.log("4. Checking existing slug:", slug);
-
-    const parsedPrice = Number(price);
-    const parsedStock = Number(stock);
-
-    if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
-      return res.status(400).json({
-        message: "Price must be a valid non-negative number",
+        message: "Name, SKU, category, a non-negative price, and a non-negative integer low-stock limit are required.",
       });
     }
 
-    if (!Number.isInteger(parsedStock) || parsedStock < 0) {
-      return res.status(400).json({
-        message: "Stock must be a non-negative integer",
-      });
+    const supplierResult = await validateSupplier(supplierId);
+    if (supplierResult.error) {
+      return res.status(supplierResult.status).json({ message: supplierResult.error });
     }
 
-    const existingProduct = await productModel.findOne({ slug });
-    console.log("5. Existing product:", existingProduct);
-    if (existingProduct) {
-      return res.status(409).json({
-        message: "A product with this slug already exists",
-      });
-    }
-
-    const uploadImage = await uploadFile(
-      req.file.buffer,
-      req.file.originalname,
-    );
-
-    console.log("6. Uploading image...");
-    console.log("7. uploadFile returned:", uploadImage);
-    console.log("8. Image URL:", uploadImage.url);
-    console.log("9. Creating product in MongoDB...");
+    const image = await verifyImageKitAsset(imageFileId, imageUrl);
     const product = await productModel.create({
-      name,
-      slug,
-      price: parsedPrice,
-      weight,
-      description,
-      stock: parsedStock,
-      image: uploadImage.url,
+      name: name.trim(),
+      description: typeof description === "string" ? description.trim() : "",
+      sku: sku.trim(),
+      category: category.trim(),
+      price: Number(price),
+      lowStockLimit: Number(lowStockLimit),
+      supplier: supplierResult.supplier,
+      createdBy: req.user.id,
+      ...image,
     });
-    console.log("10. MongoDB CREATE SUCCESS:", product._id);
-    console.log("7. Image uploaded:", uploadImage.url);
-    console.log("8. Creating product in MongoDB...");
-    console.log("9. PRODUCT CREATED:", product);
-    res.status(201).json({
-      message: "Product added successfully",
+
+    return res.status(201).json({
+      message: "Product created successfully.",
       product,
     });
   } catch (error) {
-    console.error("CREATE FAILED:", error.message);
-    console.error("ERROR CODE:", error.code);
-    console.error("KEY PATTERN:", error.keyPattern);
-    console.error("KEY VALUE:", error.keyValue);
-    console.error("STACK:", error.stack);
-    res.status(500).json({
-      message: "Failed to create product",
-      error: error.message,
+    if (error.code === 11000) {
+      return res.status(409).json({ message: "A product with this SKU already exists." });
+    }
+    console.error("Create product error:", error);
+    return res.status(error.statusCode || 500).json({
+      message: error.statusCode ? error.message : "Unable to create product.",
     });
   }
 }
 
-async function fetchSingleProduct(req, res) {
+export async function updateProduct(req, res) {
   try {
-    const { id } = req.params;
-
-    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        message: "Invalid product ID",
-      });
+    const body = req.body || {};
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid product ID." });
     }
-
-    const product = await productModel.findById(id);
-
-    if (!product) {
-      return res.status(404).json({
-        message: "Product not found",
-      });
-    }
-
-    return res.status(200).json({
-      message: "Product fetched successfully",
-      product,
+    const product = await productModel.findOne({
+      _id: req.params.id,
+      sku: { $exists: true },
     });
-  } catch (error) {
-    return res.status(500).json({
-      message: "Failed to fetch product",
-    });
-  }
-}
-
-async function updateProduct(req, res) {
-  try {
-    const { id } = req.params;
-
-    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        message: "Invalid product ID",
-      });
-    }
-
-    const { name, slug, price, weight, description, stock } = req.body;
-
-    const product = await productModel.findById(id);
-
     if (!product) {
-      return res.status(404).json({
-        message: "Product not found",
-      });
+      return res.status(404).json({ message: "Product not found." });
     }
 
+    const { name, description, sku, category, price, lowStockLimit, supplier } =
+      body;
+    if (name !== undefined) {
+      if (typeof name !== "string" || !name.trim()) {
+        return res.status(400).json({ message: "Name cannot be empty." });
+      }
+      product.name = name.trim();
+    }
+    if (description !== undefined) {
+      product.description =
+        typeof description === "string" ? description.trim() : "";
+    }
+    if (sku !== undefined) {
+      if (typeof sku !== "string" || !sku.trim()) {
+        return res.status(400).json({ message: "SKU cannot be empty." });
+      }
+      product.sku = sku.trim();
+    }
+    if (category !== undefined) {
+      if (typeof category !== "string" || !category.trim()) {
+        return res.status(400).json({ message: "Category cannot be empty." });
+      }
+      product.category = category.trim();
+    }
     if (price !== undefined) {
-      const parsedPrice = Number(price);
-
-      if (price === "" || !Number.isFinite(parsedPrice) || parsedPrice < 0) {
+      if (!isNonNegativeNumber(price)) {
+        return res.status(400).json({ message: "Price must be non-negative." });
+      }
+      product.price = Number(price);
+    }
+    if (lowStockLimit !== undefined) {
+      if (!isNonNegativeInteger(lowStockLimit)) {
         return res.status(400).json({
-          message: "Price must be a valid non-negative number",
+          message: "Low-stock limit must be a non-negative integer.",
         });
       }
-
-      product.price = parsedPrice;
+      product.lowStockLimit = Number(lowStockLimit);
     }
-
-    if (stock !== undefined) {
-      const parsedStock = Number(stock);
-
-      if (stock === "" || !Number.isInteger(parsedStock) || parsedStock < 0) {
-        return res.status(400).json({
-          message: "Stock must be a non-negative integer",
-        });
+    if (supplier !== undefined) {
+      const supplierResult = await validateSupplier(supplier);
+      if (supplierResult.error) {
+        return res.status(supplierResult.status).json({ message: supplierResult.error });
       }
-
-      product.stock = parsedStock;
+      product.supplier = supplierResult.supplier;
     }
-
-    if (slug !== undefined && slug !== product.slug) {
-      const existingProduct = await productModel.findOne({ slug });
-
-      if (existingProduct) {
-        return res.status(409).json({
-          message: "A product with this slug already exists",
-        });
-      }
-
-      product.slug = slug;
-    }
-
-    if (name !== undefined) product.name = name;
-    if (weight !== undefined) product.weight = weight;
-    if (description !== undefined) product.description = description;
-
-    if (req.file) {
-      const uploadImage = await uploadFile(
-        req.file.buffer,
-        req.file.originalname,
+    if (body.imageUrl !== undefined || body.imageFileId !== undefined) {
+      const image = await verifyImageKitAsset(
+        body.imageFileId,
+        body.imageUrl,
       );
-
-      product.image = uploadImage.url;
+      product.imageUrl = image.imageUrl;
+      product.imageFileId = image.imageFileId;
     }
 
     await product.save();
-
     return res.status(200).json({
-      message: "Product updated successfully",
+      message: "Product updated successfully.",
       product,
     });
   } catch (error) {
-    return res.status(500).json({
-      message: "Failed to update product",
-      error: error.message,
+    if (error.code === 11000) {
+      return res.status(409).json({ message: "A product with this SKU already exists." });
+    }
+    console.error("Update product error:", error);
+    return res.status(error.statusCode || 500).json({
+      message: error.statusCode ? error.message : "Unable to update product.",
     });
   }
 }
 
-async function deleteProduct(req, res) {
+export async function deleteProduct(req, res) {
   try {
-    const { id } = req.params;
-
-    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({
-        message: "Invalid product ID",
-      });
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid product ID." });
     }
-
-    const product = await productModel.findByIdAndDelete(id);
-
+    const product = await productModel.findOne({
+      _id: req.params.id,
+      sku: { $exists: true },
+    });
     if (!product) {
-      return res.status(404).json({
-        message: "Product not found",
+      return res.status(404).json({ message: "Product not found." });
+    }
+
+    const [stock, order, supplyRequest, transaction] = await Promise.all([
+      stockModel.exists({ product: product._id }),
+      orderModel.exists({ "products.product": product._id }),
+      supplyRequestModel.exists({ product: product._id }),
+      stockTransactionModel.exists({ product: product._id }),
+    ]);
+    if (stock || order || supplyRequest || transaction) {
+      return res.status(409).json({
+        message: "Products referenced by stock, orders, or supply requests cannot be deleted.",
       });
     }
 
-    return res.status(200).json({
-      message: "Product deleted successfully",
-      product,
-    });
+    await productModel.findByIdAndDelete(product._id);
+    return res.status(200).json({ message: "Product deleted successfully." });
   } catch (error) {
-    return res.status(500).json({
-      message: "Failed to delete product",
-    });
+    console.error("Delete product error:", error);
+    return res.status(500).json({ message: "Unable to delete product." });
   }
 }
-
-export {
-  addProduct,
-  fetchProduct,
-  fetchSingleProduct,
-  updateProduct,
-  deleteProduct,
-};

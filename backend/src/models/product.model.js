@@ -15,7 +15,6 @@ const productSchema = new mongoose.Schema(
     sku: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
       uppercase: true,
     },
@@ -57,6 +56,11 @@ const productSchema = new mongoose.Schema(
     },
   },
   { timestamps: true },
+);
+
+productSchema.index(
+  { sku: 1 },
+  { unique: true, partialFilterExpression: { sku: { $type: "string" } } },
 );
 
 const Product = mongoose.model("Product", productSchema);

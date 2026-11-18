@@ -50,12 +50,26 @@ export async function verifyImageKitAsset(fileId, imageUrl) {
     throw error;
   }
 
-  const file = await getImageKitClient().files.get(fileId.trim());
+  let file;
+  try {
+    file = await getImageKitClient().files.get(fileId.trim());
+  } catch (error) {
+    if (error.status === 404) {
+      const notFound = new Error("The ImageKit file was not found.");
+      notFound.statusCode = 400;
+      throw notFound;
+    }
+    throw error;
+  }
 
   if (
     file.fileType !== "image" ||
+    !Number.isFinite(file.size) ||
+    file.size < 0 ||
     file.size > 5 * 1024 * 1024 ||
-    file.url !== imageUrl.trim()
+    file.url !== imageUrl.trim() ||
+    typeof file.fileId !== "string" ||
+    !file.fileId
   ) {
     const error = new Error(
       "The ImageKit file must be an image under 5 MB and its URL must match the uploaded file.",
@@ -69,6 +83,15 @@ export async function verifyImageKitAsset(fileId, imageUrl) {
 
 export async function deleteImageKitAsset(fileId) {
   if (fileId) {
-    await getImageKitClient().files.delete(fileId);
+    try {
+      await getImageKitClient().files.delete(fileId);
+    } catch (error) {
+      if (error.status === 404) {
+        const notFound = new Error("The ImageKit file was not found.");
+        notFound.statusCode = 404;
+        throw notFound;
+      }
+      throw error;
+    }
   }
 }

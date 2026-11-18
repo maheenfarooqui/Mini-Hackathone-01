@@ -6,7 +6,6 @@ const orderSchema = new mongoose.Schema(
     orderNumber: {
       type: String,
       required: true,
-      unique: true,
     },
     customerName: {
       type: String,
@@ -65,6 +64,14 @@ const orderSchema = new mongoose.Schema(
     },
   },
   { timestamps: true },
+);
+
+orderSchema.index(
+  { orderNumber: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { orderNumber: { $type: "string" } },
+  },
 );
 
 const Order = mongoose.model("Order", orderSchema);

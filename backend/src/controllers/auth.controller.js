@@ -16,7 +16,7 @@ const userResponse = (user) => ({
 
 async function registerUser(req, res) {
   try {
-    const { name, email, password, phone = "" } = req.body;
+    const { name, email, password, phone = "" } = req.body || {};
 
     if (
       typeof name !== "string" ||
@@ -26,7 +26,7 @@ async function registerUser(req, res) {
       typeof password !== "string" ||
       password.length < 8
     ) {
-      return res.status(409).json({
+      return res.status(400).json({
         message: "Name, a valid email, and a password of at least 8 characters are required.",
       });
     }
@@ -66,18 +66,26 @@ async function registerUser(req, res) {
 
 async function loginUser(req, res) {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
 
     if (typeof email !== "string" || typeof password !== "string") {
       return res.status(400).json({ message: "Email and password are required." });
     }
 
-    const user = await userModel.findOne({ email: email.trim().toLowerCase() });
+    const user = await userModel
+      .findOne({ email: email.trim().toLowerCase() })
+      .select("+username");
     const isPasswordValid =
       user?.password && (await bcrypt.compare(password, user.password));
 
     if (!user || !isPasswordValid) {
       return res.status(401).json({ message: "Invalid email or password." });
+    }
+
+    if (!user.name || user.role === "user") {
+      user.name = user.name || user.username || user.email.split("@")[0];
+      if (user.role === "user") user.role = "salesRepresentative";
+      await user.save();
     }
 
     const token = jwt.sign({ id: user._id }, getJwtSecret(), {
@@ -96,10 +104,8 @@ async function loginUser(req, res) {
 }
 
 async function logoutUser(req, res) {
-  res.clearCookie("token", {
-    ...authCookieOptions(),
-    maxAge: undefined,
-  });
+  const { maxAge, ...cookieOptions } = authCookieOptions();
+  res.clearCookie("token", cookieOptions);
 
   return res.status(200).json({
     success: true,
