@@ -1,5 +1,6 @@
 import ImageKit from "@imagekit/nodejs";
 
+const maxImageSize = 5 * 1024 * 1024;
 let client;
 
 function getImageKitClient() {
@@ -38,6 +39,48 @@ export function getUploadAuthentication() {
   };
 }
 
+export function validateImageKitFile(file, imageUrl) {
+  if (file.fileType !== "image") {
+    const error = new Error("Only ImageKit image files can be used.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!Number.isFinite(file.size) || file.size < 0) {
+    const error = new Error("ImageKit did not return a valid file size.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (file.size > maxImageSize) {
+    const error = new Error("The image exceeds the 5 MB limit. Choose a smaller image.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (typeof file.fileId !== "string" || !file.fileId) {
+    const error = new Error("ImageKit did not return a valid file ID.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (typeof file.url !== "string" || !file.url) {
+    const error = new Error("ImageKit did not return a valid file URL.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (file.url !== imageUrl.trim()) {
+    const error = new Error(
+      "The ImageKit URL does not match this uploaded file. Upload the image again and save your profile.",
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return { imageUrl: file.url, imageFileId: file.fileId };
+}
+
 export async function verifyImageKitAsset(fileId, imageUrl) {
   if (
     typeof fileId !== "string" ||
@@ -62,23 +105,7 @@ export async function verifyImageKitAsset(fileId, imageUrl) {
     throw error;
   }
 
-  if (
-    file.fileType !== "image" ||
-    !Number.isFinite(file.size) ||
-    file.size < 0 ||
-    file.size > 5 * 1024 * 1024 ||
-    file.url !== imageUrl.trim() ||
-    typeof file.fileId !== "string" ||
-    !file.fileId
-  ) {
-    const error = new Error(
-      "The ImageKit file must be an image under 5 MB and its URL must match the uploaded file.",
-    );
-    error.statusCode = 400;
-    throw error;
-  }
-
-  return { imageUrl: file.url, imageFileId: file.fileId };
+  return validateImageKitFile(file, imageUrl);
 }
 
 export async function deleteImageKitAsset(fileId) {
