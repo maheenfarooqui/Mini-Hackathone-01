@@ -20,7 +20,7 @@ import transactionRoute from "./routes/transaction.route.js";
 
 const app = express();
 const allowedOrigins = new Set([
-  "https://al-nahal.vercel.app",
+  "https://mini-hackathone-01-8ofd.vercel.app",
   "http://localhost:5173",
   "http://localhost:3000",
   process.env.FRONTEND_URL,
