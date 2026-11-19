@@ -26,13 +26,9 @@ test("ImageKit image validation reports an oversized file separately", () => {
   );
 });
 
-test("ImageKit image validation reports a mismatched URL separately", () => {
-  assert.throws(
-    () => validateImageKitFile(imageFile, "https://ik.imagekit.io/account/other.jpg"),
-    {
-      message:
-        "The ImageKit URL does not match this uploaded file. Upload the image again and save your profile.",
-      statusCode: 400,
-    },
-  );
+test("ImageKit image validation returns the canonical ImageKit URL", () => {
+  assert.deepEqual(validateImageKitFile(imageFile), {
+    imageUrl: imageFile.url,
+    imageFileId: imageFile.fileId,
+  });
 });

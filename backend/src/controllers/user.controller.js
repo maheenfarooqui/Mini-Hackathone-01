@@ -264,10 +264,7 @@ export async function updateOwnProfile(req, res) {
         typeof body.phone === "string" ? body.phone.trim() : "";
     }
     if (body.imageUrl !== undefined || body.imageFileId !== undefined) {
-      const image = await verifyImageKitAsset(
-        body.imageFileId,
-        body.imageUrl,
-      );
+      const image = await verifyImageKitAsset(body.imageFileId);
       user.image = image.imageUrl;
       user.imageFileId = image.imageFileId;
     }

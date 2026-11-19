@@ -62,10 +62,7 @@ export async function updateSupplierProfile(req, res) {
         typeof body.phone === "string" ? body.phone.trim() : "";
     }
     if (body.imageUrl !== undefined || body.imageFileId !== undefined) {
-      const image = await verifyImageKitAsset(
-        body.imageFileId,
-        body.imageUrl,
-      );
+      const image = await verifyImageKitAsset(body.imageFileId);
       supplier.image = image.imageUrl;
       supplier.imageFileId = image.imageFileId;
     }

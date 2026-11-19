@@ -39,7 +39,7 @@ export function getUploadAuthentication() {
   };
 }
 
-export function validateImageKitFile(file, imageUrl) {
+export function validateImageKitFile(file) {
   if (file.fileType !== "image") {
     const error = new Error("Only ImageKit image files can be used.");
     error.statusCode = 400;
@@ -70,25 +70,19 @@ export function validateImageKitFile(file, imageUrl) {
     throw error;
   }
 
-  if (file.url !== imageUrl.trim()) {
-    const error = new Error(
-      "The ImageKit URL does not match this uploaded file. Upload the image again and save your profile.",
-    );
+  if (typeof file.url !== "string" || !file.url) {
+    const error = new Error("ImageKit did not return a valid file URL.");
     error.statusCode = 400;
     throw error;
   }
 
+  // Use the URL retrieved by file ID instead of trusting a client-supplied URL.
   return { imageUrl: file.url, imageFileId: file.fileId };
 }
 
-export async function verifyImageKitAsset(fileId, imageUrl) {
-  if (
-    typeof fileId !== "string" ||
-    !fileId.trim() ||
-    typeof imageUrl !== "string" ||
-    !imageUrl.trim()
-  ) {
-    const error = new Error("A valid ImageKit file ID and URL are required.");
+export async function verifyImageKitAsset(fileId) {
+  if (typeof fileId !== "string" || !fileId.trim()) {
+    const error = new Error("A valid ImageKit file ID is required.");
     error.statusCode = 400;
     throw error;
   }
@@ -105,7 +99,7 @@ export async function verifyImageKitAsset(fileId, imageUrl) {
     throw error;
   }
 
-  return validateImageKitFile(file, imageUrl);
+  return validateImageKitFile(file);
 }
 
 export async function deleteImageKitAsset(fileId) {

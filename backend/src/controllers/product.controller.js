@@ -163,7 +163,6 @@ export async function createProduct(req, res) {
       price,
       lowStockLimit,
       supplier: supplierId,
-      imageUrl,
       imageFileId,
     } = body;
 
@@ -184,7 +183,7 @@ export async function createProduct(req, res) {
       return res.status(supplierResult.status).json({ message: supplierResult.error });
     }
 
-    const image = await verifyImageKitAsset(imageFileId, imageUrl);
+    const image = await verifyImageKitAsset(imageFileId);
     const product = await productModel.create({
       name: name.trim(),
       description: typeof description === "string" ? description.trim() : "",
@@ -272,10 +271,7 @@ export async function updateProduct(req, res) {
       product.supplier = supplierResult.supplier;
     }
     if (body.imageUrl !== undefined || body.imageFileId !== undefined) {
-      const image = await verifyImageKitAsset(
-        body.imageFileId,
-        body.imageUrl,
-      );
+      const image = await verifyImageKitAsset(body.imageFileId);
       product.imageUrl = image.imageUrl;
       product.imageFileId = image.imageFileId;
     }
