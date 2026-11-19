@@ -15,6 +15,17 @@ Warehouse Management API in `../backend`.
 
 Use `npm run build` to create the production bundle and `npm run preview` to serve it.
 
+## Deploy to Vercel
+
+Deploy `frontend` as its own Vercel project. `frontend/vercel.json` sends `/api/*`
+to the backend deployment and rewrites other paths to `index.html` so app routes
+continue to work after refresh. Production requests use this same-origin proxy;
+do not set `VITE_API_BASE_URL` in the frontend's Vercel environment.
+
+In the backend's Vercel environment, set `FRONTEND_URL` to the frontend's exact
+origin (for example, `https://your-frontend.vercel.app`, with no trailing slash).
+The backend uses it to allow credentialed requests from the frontend.
+
 ## Accounts and roles
 
 Public registration creates a sales representative account. An administrator
@@ -25,7 +36,9 @@ the initial administrator.
 The interface uses the backend's cookie-based authentication and role-specific
 API permissions. It does not keep JWTs in browser storage. A disconnected API is
 reported in the sign-in flow; dashboard and management data are always fetched
-from the backend rather than populated with demo records.
+from the backend rather than populated with demo records. The authentication
+cookie is HTTP-only, so it will not appear in `document.cookie`; check the browser's
+cookie storage instead. A 401 from `/api/auth/me` before signing in is expected.
 
 ## Images
 
