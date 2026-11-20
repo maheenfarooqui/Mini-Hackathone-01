@@ -163,7 +163,7 @@ export function NewSupplyRequestPage() {
         eyebrow="Supplier workspace"
         title="Request replenishment"
         description="Send a replenishment request for one of the products associated with your account."
-        actions={<Link to="/app/supply-requests" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-card px-4 text-xs font-semibold text-copy hover:bg-[#26343c]"><ArrowRight size={14} className="rotate-180" /> Request history</Link>}
+        actions={<Link to="/app/supply-requests" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-card px-4 text-xs font-semibold text-copy hover:bg-slate-100"><ArrowRight size={14} className="rotate-180" /> Request history</Link>}
       />
       <div className="grid gap-4 lg:grid-cols-[1fr_0.78fr]">
         <Card className="p-5 sm:p-7">

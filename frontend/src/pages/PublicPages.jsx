@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { Button, Field } from "../components/UI.jsx";
+import { BrandName, Button, Field } from "../components/UI.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { getApiError } from "../api/axios.js";
 
@@ -48,21 +48,16 @@ export function LandingPage() {
     <div className="min-h-screen overflow-hidden bg-ink">
       <header className="absolute inset-x-0 top-0 z-30">
         <div className="mx-auto flex h-[78px] max-w-[1320px] items-center justify-between px-5 sm:px-8">
-          <Link to="/" className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange text-white">
-              <Boxes size={19} />
-            </span>
-            <span className="text-[15px] font-extrabold tracking-[0.12em]">
-              STOCK<span className="text-orange">NATION</span>
-            </span>
+          <Link to="/" className="text-[17px]">
+            <BrandName className="brand-name--inverse" />
           </Link>
-          <nav className="hidden items-center gap-8 text-xs font-medium text-muted md:flex">
+          <nav className="hidden items-center gap-8 text-xs font-medium text-white/75 md:flex">
             <a href="#platform" className="transition hover:text-copy">Platform</a>
             <a href="#how-it-works" className="transition hover:text-copy">How it works</a>
             <a href="#footer" className="transition hover:text-copy">About</a>
           </nav>
           <div className="hidden items-center gap-3 md:flex">
-            <Link to="/login" className="px-3 py-2 text-xs font-semibold text-muted transition hover:text-copy">
+            <Link to="/login" className="px-3 py-2 text-xs font-semibold text-white/75 transition hover:text-white">
               Log in
             </Link>
             <Link to="/register">
@@ -71,7 +66,7 @@ export function LandingPage() {
           </div>
           <button
             onClick={() => setMobileMenu((open) => !open)}
-            className="rounded-lg border border-line p-2 text-muted md:hidden"
+            className="rounded-lg border border-white/30 p-2 text-white md:hidden"
             aria-label={mobileMenu ? "Close menu" : "Open menu"}
           >
             {mobileMenu ? <X size={18} /> : <Menu size={18} />}
@@ -116,7 +111,7 @@ export function LandingPage() {
                 <Link to="/register">
                   <Button size="lg">Start managing smarter <ArrowRight size={16} /></Button>
                 </Link>
-                <a href="#platform" className="inline-flex min-h-12 items-center gap-2 px-4 text-sm font-medium text-copy/80 transition hover:text-white">
+                <a href="#platform" className="inline-flex min-h-12 items-center gap-2 px-4 text-sm font-medium text-white/80 transition hover:text-white">
                   Explore the platform <ArrowDown size={15} />
                 </a>
               </div>
@@ -126,6 +121,16 @@ export function LandingPage() {
                     <Check size={13} className="text-orange" /> {item}
                   </span>
                 ))}
+              </div>
+              <div className="glass mt-6 w-[250px] border border-white/10 p-4 shadow-xl">
+                <p className="text-[10px] font-medium text-muted">Connected operations</p>
+                <p className="mt-2 text-sm font-semibold text-white">From supplier to shipment.</p>
+                <div className="mt-4 flex items-center">
+                  {["S", "W", "O"].map((item, index) => (
+                    <span key={item} className={`mr-1.5 flex h-7 w-7 items-center justify-center border border-white/20 text-[9px] font-bold ${index === 0 ? "bg-orange text-white" : "bg-white/10 text-white"}`}>{item}</span>
+                  ))}
+                  <span className="ml-1 text-[9px] text-muted">Supplier · Warehouse · Orders</span>
+                </div>
               </div>
             </motion.div>
             <motion.div
@@ -166,16 +171,6 @@ export function LandingPage() {
                   <ChevronRight size={15} className="text-orange" />
                 </div>
               </div>
-              <div className="glass absolute bottom-9 left-1 w-[210px] rounded-2xl border border-white/10 p-4 shadow-xl">
-                <p className="text-[10px] font-medium text-muted">Connected operations</p>
-                <p className="mt-2 text-sm font-semibold text-white">From supplier to shipment.</p>
-                <div className="mt-4 flex -space-x-2">
-                  {["S", "W", "O"].map((item, index) => (
-                    <span key={item} className={`flex h-7 w-7 items-center justify-center rounded-full border-2 border-panel text-[9px] font-bold ${index === 0 ? "bg-orange text-white" : "bg-[#354149] text-slate-200"}`}>{item}</span>
-                  ))}
-                  <span className="ml-3 self-center text-[9px] text-muted">Supplier · Warehouse · Orders</span>
-                </div>
-              </div>
             </motion.div>
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-orange/40 to-transparent" />
@@ -185,10 +180,10 @@ export function LandingPage() {
           <div className="mb-12 grid gap-5 md:grid-cols-[0.8fr_1.2fr] md:items-end">
             <div>
               <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.22em] text-orange">Your operation, connected</p>
-              <h2 className="max-w-md text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl">Less chasing. More moving.</h2>
+              <h2 className="max-w-md text-3xl font-semibold leading-tight tracking-tight text-copy sm:text-4xl">Less chasing. More moving.</h2>
             </div>
             <p className="max-w-xl text-sm leading-7 text-muted md:justify-self-end">
-              STOCKNATION gives each team the right view of the same operation—from a single product to your warehouse network.
+              Manage Your Goods gives each team the right view of the same operation—from a single product to your warehouse network.
             </p>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
@@ -216,7 +211,7 @@ export function LandingPage() {
 
         <section id="how-it-works" className="border-y border-line/70 bg-panel/45">
           <div className="mx-auto grid max-w-[1320px] gap-12 px-5 py-20 sm:px-8 sm:py-24 md:grid-cols-2 md:items-center">
-            <div className="relative min-h-[270px] overflow-hidden rounded-3xl border border-line bg-[#141f25] p-7 sm:p-9">
+            <div className="relative min-h-[270px] overflow-hidden rounded-3xl border border-line bg-card p-7 sm:p-9">
               <div className="absolute -right-10 -top-20 h-64 w-64 rounded-full bg-orange/10 blur-3xl" />
               <p className="relative text-[10px] font-bold uppercase tracking-[0.2em] text-orange">Built around your people</p>
               <div className="relative mt-8 space-y-3">
@@ -238,7 +233,7 @@ export function LandingPage() {
             </div>
             <div>
               <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.22em] text-orange">A clearer way to work</p>
-              <h2 className="text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl">The right tools for every role.</h2>
+              <h2 className="text-3xl font-semibold leading-tight tracking-tight text-copy sm:text-4xl">The right tools for every role.</h2>
               <p className="mt-5 text-sm leading-7 text-muted">
                 Give administrators, warehouse managers, suppliers and sales teams a dedicated workspace—with permissions that keep your data and processes in the right hands.
               </p>
@@ -253,7 +248,7 @@ export function LandingPage() {
           <div className="relative overflow-hidden rounded-3xl border border-orange/20 bg-gradient-to-br from-orange/15 via-panel to-panel px-6 py-12 text-center sm:px-12 sm:py-16">
             <div className="absolute -right-14 -top-28 h-72 w-72 rounded-full bg-orange/10 blur-3xl" />
             <p className="relative text-[10px] font-bold uppercase tracking-[0.22em] text-orange">Take control of your inventory</p>
-            <h2 className="relative mx-auto mt-3 max-w-2xl text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl">
+            <h2 className="relative mx-auto mt-3 max-w-2xl text-3xl font-semibold leading-tight tracking-tight text-copy sm:text-4xl">
               Make your next move a smarter one.
             </h2>
             <p className="relative mx-auto mt-4 max-w-lg text-sm leading-6 text-muted">
@@ -267,9 +262,9 @@ export function LandingPage() {
       </main>
       <footer id="footer" className="border-t border-line/70">
         <div className="mx-auto flex max-w-[1320px] flex-col gap-4 px-5 py-7 text-[11px] text-muted sm:flex-row sm:items-center sm:justify-between sm:px-8">
-          <Link to="/" className="font-extrabold tracking-[0.12em] text-copy">STOCK<span className="text-orange">NATION</span></Link>
+          <Link to="/"><BrandName /></Link>
           <p>Clarity for every part of your supply chain.</p>
-          <p>© {new Date().getFullYear()} STOCKNATION</p>
+          <p>© {new Date().getFullYear()} Manage Your Goods</p>
         </div>
       </footer>
     </div>
@@ -291,7 +286,7 @@ export function AuthPage({ mode }) {
     try {
       if (isRegister) {
         await register(values);
-        toast.success("Account created. Welcome to STOCKNATION.");
+        toast.success("Account created. Welcome to Manage Your Goods.");
       } else {
         await login(values);
         toast.success("Welcome back.");
@@ -308,9 +303,8 @@ export function AuthPage({ mode }) {
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-ink px-4 py-12">
       <div className="hero-grid absolute inset-0 opacity-50" />
       <div className="absolute -left-24 top-0 h-80 w-80 rounded-full bg-orange/10 blur-[120px]" />
-      <Link to="/" className="absolute left-5 top-6 z-10 flex items-center gap-2.5 sm:left-8 sm:top-8">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange text-white"><Boxes size={19} /></span>
-        <span className="text-sm font-extrabold tracking-[0.1em]">STOCK<span className="text-orange">NATION</span></span>
+      <Link to="/" className="absolute left-5 top-6 z-10 text-[17px] sm:left-8 sm:top-8">
+        <BrandName />
       </Link>
       <motion.section
         initial={{ opacity: 0, y: 12 }}
@@ -324,13 +318,13 @@ export function AuthPage({ mode }) {
           <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-orange">
             {isRegister ? "Get started" : "Welcome back"}
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">
+          <h1 className="text-2xl font-semibold tracking-tight text-copy">
             {isRegister ? "Create your account" : "Sign in to your workspace"}
           </h1>
           <p className="mt-2 text-sm text-muted">
             {isRegister
               ? "Create a sales representative account to place and manage orders."
-              : "Enter your credentials to continue to STOCKNATION."}
+              : "Enter your credentials to continue to Manage Your Goods."}
           </p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -362,7 +356,7 @@ export function AuthPage({ mode }) {
           </Button>
         </form>
         <p className="mt-6 text-center text-xs text-muted">
-          {isRegister ? "Already have an account?" : "New to STOCKNATION?"}{" "}
+          {isRegister ? "Already have an account?" : "New to Manage Your Goods?"}{" "}
           <Link
             to={isRegister ? "/login" : "/register"}
             className="font-semibold text-orange transition hover:text-orange-300"

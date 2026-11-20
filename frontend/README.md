@@ -1,4 +1,4 @@
-# STOCKNATION frontend
+# Manage Your Goods frontend
 
 React, Vite, Tailwind CSS, Framer Motion and Axios frontend for the Inventory &
 Warehouse Management API in `../backend`.

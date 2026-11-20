@@ -22,7 +22,7 @@ import {
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext.jsx";
 import { getApiError } from "../api/axios.js";
-import { cx, initials } from "../components/UI.jsx";
+import { BrandName, cx, initials } from "../components/UI.jsx";
 
 const roleLinks = {
   admin: [
@@ -77,17 +77,7 @@ function SidebarContent({ onNavigate }) {
   return (
     <div className="flex h-full flex-col">
       <Link to="/app" className="flex items-center gap-3 px-6 py-6" onClick={onNavigate}>
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange text-white shadow-[0_5px_20px_rgba(255,90,10,0.22)]">
-          <Boxes size={19} strokeWidth={2.2} />
-        </span>
-        <span>
-          <span className="block text-[15px] font-extrabold tracking-[0.1em] text-copy">
-            STOCK<span className="text-orange">NATION</span>
-          </span>
-          <span className="mt-0.5 block text-[9px] uppercase tracking-[0.2em] text-muted">
-            Operations suite
-          </span>
-        </span>
+        <BrandName className="text-[17px]" />
       </Link>
       <div className="mx-5 border-t border-line/80" />
       <nav className="scrollbar-thin flex-1 space-y-1 overflow-y-auto px-3 py-5">
@@ -96,7 +86,10 @@ function SidebarContent({ onNavigate }) {
         </p>
         {links.map(({ label, to, icon: Icon }) => {
           const isActive =
-            to === "/app" ? activeSection === to : activeSection === to || activeSection.startsWith(`${to}/`);
+            activeSection === to ||
+            (to !== "/app" &&
+              activeSection.startsWith(`${to}/`) &&
+              !(to === "/app/orders" && activeSection.startsWith(`${to}/new`)));
           return (
             <NavLink
               key={to}
@@ -167,7 +160,7 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-ink text-copy">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[248px] border-r border-line/80 bg-[#141f25] lg:block">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[248px] border-r border-line/80 bg-panel lg:block">
         <SidebarContent />
       </aside>
       <AnimatePresence>
@@ -186,7 +179,7 @@ export default function AppLayout() {
               animate={{ x: 0 }}
               exit={{ x: -270 }}
               transition={{ type: "tween", duration: 0.2 }}
-              className="fixed inset-y-0 left-0 z-50 w-[270px] border-r border-line bg-[#141f25] lg:hidden"
+              className="fixed inset-y-0 left-0 z-50 w-[270px] border-r border-line bg-panel lg:hidden"
             >
               <div className="absolute right-3 top-5">
                 <button
@@ -217,7 +210,7 @@ export default function AppLayout() {
             <div>
               <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-muted/70">Your workspace</p>
               <p className="mt-0.5 text-xs font-semibold text-copy sm:text-sm">
-                {roleNames[user?.role] || "Stocknation"}
+                {roleNames[user?.role] || "Manage Your Goods"}
               </p>
             </div>
           </div>

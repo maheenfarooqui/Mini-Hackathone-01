@@ -47,14 +47,14 @@ import toast from "react-hot-toast";
 
 const chartTooltip = {
   contentStyle: {
-    background: "#18242b",
-    border: "1px solid #354149",
+    background: "#ffffff",
+    border: "1px solid #dedede",
     borderRadius: 12,
-    color: "#f4f5f6",
+    color: "#111111",
     fontSize: 11,
   },
-  labelStyle: { color: "#a7b0b5", marginBottom: 4 },
-  itemStyle: { color: "#ff5a0a" },
+  labelStyle: { color: "#666666", marginBottom: 4 },
+  itemStyle: { color: "#ff0050" },
 };
 
 function activityForWeek(records, valueKey) {
@@ -239,12 +239,12 @@ export default function DashboardPage() {
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={activity} margin={{ top: 5, right: 4, left: -20, bottom: 0 }}>
-                      <CartesianGrid stroke="#354149" strokeDasharray="3 5" vertical={false} />
-                      <XAxis dataKey="day" tick={{ fill: "#829097", fontSize: 10 }} axisLine={false} tickLine={false} />
-                      <YAxis allowDecimals={false} tick={{ fill: "#829097", fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <CartesianGrid stroke="#dedede" strokeDasharray="3 5" vertical={false} />
+                      <XAxis dataKey="day" tick={{ fill: "#666666", fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <YAxis allowDecimals={false} tick={{ fill: "#666666", fontSize: 10 }} axisLine={false} tickLine={false} />
                       <Tooltip {...chartTooltip} />
-                      <Bar dataKey="value" name={user.role === "salesRepresentative" ? "Order value (Rs)" : user.role === "supplier" ? "Requests" : "Units moved"} radius={[5, 5, 0, 0]} maxBarSize={38}>
-                        {activity.map((point) => <Cell key={point.day} fill={point.value ? "#ff5a0a" : "#354149"} />)}
+                      <Bar dataKey="value" name={user.role === "salesRepresentative" ? "Order value (Rs)" : user.role === "supplier" ? "Requests" : "Units moved"} radius={[0, 0, 0, 0]} maxBarSize={38}>
+                        {activity.map((point) => <Cell key={point.day} fill={point.value ? "#ff0050" : "#dedede"} />)}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>

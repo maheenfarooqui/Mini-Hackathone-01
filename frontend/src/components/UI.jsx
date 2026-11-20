@@ -4,6 +4,15 @@ import { X } from "lucide-react";
 
 export const cx = (...classes) => classes.filter(Boolean).join(" ");
 
+export function BrandName({ className }) {
+  return (
+    <span className={cx("brand-name", className)}>
+      <span>Manage</span>{" "}
+      <span className="brand-name__accent">Your Goods</span>
+    </span>
+  );
+}
+
 export function Button({
   children,
   variant = "primary",
@@ -14,8 +23,8 @@ export function Button({
   ...props
 }) {
   const variants = {
-    primary: "bg-orange text-white hover:bg-orange-600 shadow-[0_8px_24px_rgba(255,90,10,0.18)]",
-    secondary: "border border-line bg-card text-copy hover:border-muted/60 hover:bg-[#26343c]",
+    primary: "bg-orange text-white hover:bg-[#d90043] shadow-[0_8px_24px_rgba(255,0,80,0.2)]",
+    secondary: "border border-line bg-card text-copy hover:border-muted/60 hover:bg-slate-100",
     ghost: "text-muted hover:bg-white/5 hover:text-copy",
     danger: "border border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/20",
   };

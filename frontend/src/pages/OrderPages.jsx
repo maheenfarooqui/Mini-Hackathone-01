@@ -225,7 +225,7 @@ export function NewOrderPage() {
         eyebrow="Sales orders"
         title="Create an order"
         description="Build a sales order from products currently available at the selected warehouse."
-        actions={<Link to="/app/orders" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-card px-4 text-xs font-semibold text-copy hover:bg-[#26343c]"><ArrowLeft size={14} /> Back to orders</Link>}
+        actions={<Link to="/app/orders" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-card px-4 text-xs font-semibold text-copy hover:bg-slate-100"><ArrowLeft size={14} /> Back to orders</Link>}
       />
       <form onSubmit={submit} className="grid gap-4 xl:grid-cols-[1fr_350px]">
         <div className="space-y-4">
