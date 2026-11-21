@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -39,9 +39,50 @@ const features = [
   },
 ];
 
+const HERO_HEADING = "Built for the\nmove of business.";
+
 export function LandingPage() {
   const { user, loading } = useAuth();
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [typedHeading, setTypedHeading] = useState("");
+
+  useEffect(() => {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (reducedMotion.matches) {
+      setTypedHeading(HERO_HEADING);
+      return undefined;
+    }
+
+    let position = 0;
+    let deleting = false;
+    let timeoutId;
+    const tick = () => {
+      if (deleting) {
+        position -= 1;
+        setTypedHeading(HERO_HEADING.slice(0, position));
+        if (position === 0) {
+          deleting = false;
+          timeoutId = window.setTimeout(tick, 450);
+          return;
+        }
+        timeoutId = window.setTimeout(tick, 38);
+        return;
+      }
+
+      position += 1;
+      setTypedHeading(HERO_HEADING.slice(0, position));
+      if (position === HERO_HEADING.length) {
+        deleting = true;
+        timeoutId = window.setTimeout(tick, 1300);
+        return;
+      }
+      timeoutId = window.setTimeout(tick, 90);
+    };
+
+    timeoutId = window.setTimeout(tick, 150);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
   if (!loading && user) return <Navigate to="/app" replace />;
 
   return (
@@ -61,7 +102,7 @@ export function LandingPage() {
               Log in
             </Link>
             <Link to="/register">
-              <Button size="sm" className="px-4">Get started <ArrowUpRight size={14} /></Button>
+              <Button size="sm" className="landing-cta px-4">Get started <ArrowUpRight size={14} /></Button>
             </Link>
           </div>
           <button
@@ -78,7 +119,7 @@ export function LandingPage() {
               <a href="#platform" className="rounded-lg px-3 py-2.5 text-sm text-muted" onClick={() => setMobileMenu(false)}>Platform</a>
               <a href="#how-it-works" className="rounded-lg px-3 py-2.5 text-sm text-muted" onClick={() => setMobileMenu(false)}>How it works</a>
               <Link to="/login" className="rounded-lg px-3 py-2.5 text-sm text-muted">Log in</Link>
-              <Link to="/register" className="mt-2"><Button className="w-full">Get started <ArrowRight size={15} /></Button></Link>
+              <Link to="/register" className="mt-2"><Button className="landing-cta w-full">Get started <ArrowRight size={15} /></Button></Link>
             </div>
           </div>
         )}
@@ -100,16 +141,21 @@ export function LandingPage() {
                 Inventory, in control
               </div>
               <h1 className="max-w-[650px] text-[clamp(3.2rem,7.3vw,6.6rem)] font-semibold leading-[0.94] tracking-[-0.065em] text-white">
-                Built for the
-                <br />
-                <span className="text-orange">move</span> of business.
+                <span className="sr-only">Built for the move of business.</span>
+                <span aria-hidden="true">
+                  {typedHeading.split("\n")[0]}
+                  <br />
+                  <span className="text-orange">{typedHeading.split("\n")[1]?.slice(0, 4)}</span>
+                  {typedHeading.split("\n")[1]?.slice(4)}
+                  <span className="hero-typewriter-cursor">|</span>
+                </span>
               </h1>
               <p className="mt-7 max-w-[500px] text-base leading-7 text-slate-300/80 sm:text-lg sm:leading-8">
                 Inventory operations move fast. Keep every product, warehouse, supplier and order moving in the same direction.
               </p>
               <div className="mt-9 flex flex-wrap items-center gap-3">
                 <Link to="/register">
-                  <Button size="lg">Start managing smarter <ArrowRight size={16} /></Button>
+                  <Button size="lg" className="landing-cta">Start managing smarter <ArrowRight size={16} /></Button>
                 </Link>
                 <a href="#platform" className="inline-flex min-h-12 items-center gap-2 px-4 text-sm font-medium text-white/80 transition hover:text-white">
                   Explore the platform <ArrowDown size={15} />

@@ -73,6 +73,36 @@ a {
   animation: brand-accent 3s ease-in-out infinite alternate;
 }
 
+.landing-cta {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  animation: landing-cta-glow 2.8s ease-in-out infinite;
+}
+
+.landing-cta::before {
+  position: absolute;
+  inset: -80% auto -80% -55%;
+  width: 42%;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 62%), transparent);
+  transform: skewX(-22deg);
+  animation: landing-cta-shine 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.landing-cta > * {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-typewriter-cursor {
+  display: inline-block;
+  margin-left: 0.04em;
+  color: var(--color-orange);
+  animation: hero-typewriter-cursor 0.75s steps(2, start) infinite;
+}
+
 @keyframes brand-accent {
   from {
     color: #ff0050;
@@ -83,8 +113,38 @@ a {
   }
 }
 
+@keyframes landing-cta-shine {
+  0%,
+  25% {
+    transform: translateX(0) skewX(-22deg);
+  }
+  70%,
+  100% {
+    transform: translateX(390%) skewX(-22deg);
+  }
+}
+
+@keyframes landing-cta-glow {
+  0%,
+  100% {
+    box-shadow: 0 8px 24px rgb(255 0 80 / 20%);
+  }
+  50% {
+    box-shadow: 0 8px 32px rgb(255 0 80 / 48%), 0 0 0 2px rgb(255 255 255 / 20%);
+  }
+}
+
+@keyframes hero-typewriter-cursor {
+  to {
+    visibility: hidden;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .brand-name__accent {
+  .brand-name__accent,
+  .landing-cta,
+  .landing-cta::before,
+  .hero-typewriter-cursor {
     animation: none;
   }
 }
