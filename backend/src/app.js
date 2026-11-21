@@ -17,14 +17,15 @@ import supplyRequestRoute from "./routes/supplyRequest.route.js";
 import dashboardRoute from "./routes/dashboard.route.js";
 import imagekitRoute from "./routes/imagekit.route.js";
 import transactionRoute from "./routes/transaction.route.js";
+import activityRoute from "./routes/activity.route.js";
+import reportRoute from "./routes/report.route.js";
+import { getAllowedOrigins } from "./utils/corsOrigins.js";
 
 const app = express();
-const allowedOrigins = new Set([
-  "https://mini-hackathone-01-8ofd.vercel.app",
-  "http://localhost:5173",
-  "http://localhost:3000",
+const allowedOrigins = getAllowedOrigins(
   process.env.FRONTEND_URL,
-].filter(Boolean));
+  process.env.NODE_ENV,
+);
 
 app.use(helmet());
 app.use(
@@ -74,7 +75,10 @@ app.use("/api/orders", orderRoute);
 app.use("/api/suppliers", supplierRoute);
 app.use("/api/supply-requests", supplyRequestRoute);
 app.use("/api/dashboard", dashboardRoute);
+app.use("/api/activity", activityRoute);
+app.use("/api/reports", reportRoute);
 app.use("/api/imagekit", imagekitRoute);
+app.use("/api/upload", imagekitRoute);
 
 app.use((req, res) => {
   return res.status(404).json({ message: "API endpoint not found." });

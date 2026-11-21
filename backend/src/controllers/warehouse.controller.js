@@ -7,6 +7,7 @@ import supplyRequestModel from "../models/supplyRequest.model.js";
 import stockTransactionModel from "../models/stockTransaction.model.js";
 import { assignedWarehouseIds } from "../utils/warehouseAccess.js";
 import { isNonNegativeInteger } from "../utils/validation.js";
+import { logActivity } from "../utils/logActivity.js";
 
 async function validateManager(managerId) {
   if (!managerId) return { manager: null };
@@ -94,6 +95,9 @@ export async function createWarehouse(req, res) {
         $addToSet: { assignedWarehouses: warehouse._id },
       });
     }
+    await logActivity(req, "create", "warehouse", warehouse._id, {
+      name: warehouse.name,
+    });
 
     return res.status(201).json({
       message: "Warehouse created successfully.",
@@ -161,6 +165,9 @@ export async function updateWarehouse(req, res) {
         $addToSet: { assignedWarehouses: warehouse._id },
       });
     }
+    await logActivity(req, "update", "warehouse", warehouse._id, {
+      name: warehouse.name,
+    });
 
     return res.status(200).json({
       message: "Warehouse updated successfully.",
@@ -199,6 +206,9 @@ export async function deleteWarehouse(req, res) {
       });
     }
     await warehouseModel.findByIdAndDelete(warehouse._id);
+    await logActivity(req, "delete", "warehouse", warehouse._id, {
+      name: warehouse.name,
+    });
     return res.status(200).json({ message: "Warehouse deleted successfully." });
   } catch (error) {
     console.error("Delete warehouse error:", error);

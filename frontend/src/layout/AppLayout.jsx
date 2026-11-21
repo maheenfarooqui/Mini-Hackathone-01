@@ -36,6 +36,7 @@ const roleLinks = {
     { label: "Supply requests", to: "/app/supply-requests", icon: ClipboardList },
     { label: "Suppliers", to: "/app/suppliers", icon: Truck },
     { label: "Team & access", to: "/app/users", icon: Users },
+    { label: "Activity log", to: "/app/activity", icon: Activity },
   ],
   warehouseManager: [
     { label: "Overview", to: "/app", icon: LayoutDashboard },
@@ -47,6 +48,7 @@ const roleLinks = {
     { label: "Stock movements", to: "/app/transactions", icon: Activity },
     { label: "Low stock", to: "/app/low-stock", icon: AlertTriangle },
     { label: "Warehouses", to: "/app/warehouses", icon: Warehouse },
+    { label: "Supply requests", to: "/app/supply-requests", icon: ClipboardList },
   ],
   supplier: [
     { label: "Overview", to: "/app", icon: LayoutDashboard },

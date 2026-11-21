@@ -3,6 +3,8 @@ import {
   createProduct,
   deleteProduct,
   getProduct,
+  getProductBySku,
+  listProductCategories,
   listProducts,
   updateProduct,
 } from "../controllers/product.controller.js";
@@ -21,12 +23,22 @@ router.get(
   listProducts,
 );
 router.get(
+  "/categories",
+  allowRoles("admin", "warehouseManager", "supplier", "salesRepresentative"),
+  listProductCategories,
+);
+router.get(
+  "/sku/:sku",
+  allowRoles("admin", "warehouseManager", "supplier", "salesRepresentative"),
+  getProductBySku,
+);
+router.get(
   "/:id",
   allowRoles("admin", "warehouseManager", "supplier", "salesRepresentative"),
   getProduct,
 );
-router.post("/", adminOnly, createProduct);
-router.put("/:id", adminOnly, updateProduct);
+router.post("/", allowRoles("admin", "warehouseManager"), createProduct);
+router.put("/:id", allowRoles("admin", "warehouseManager"), updateProduct);
 router.delete("/:id", adminOnly, deleteProduct);
 
 export default router;

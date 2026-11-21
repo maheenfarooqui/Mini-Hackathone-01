@@ -54,11 +54,29 @@ function roleLabel(role) {
 
 export function ProductsPage() {
   const { user } = useAuth();
-  const canManage = user.role === "admin";
+  const canEdit = user.role === "admin" || user.role === "warehouseManager";
+  const canDelete = user.role === "admin";
   const [products, setProducts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
+  const [skuQuery, setSkuQuery] = useState("");
+  const [skuProduct, setSkuProduct] = useState(null);
+  const [skuLoading, setSkuLoading] = useState(false);
+  const [filters, setFilters] = useState({
+    q: "",
+    category: "",
+    supplier: "",
+    warehouse: "",
+    available: "",
+    minPrice: "",
+    maxPrice: "",
+    sort: "-createdAt",
+  });
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [limit, setLimit] = useState(20);
   const [modal, setModal] = useState(null);
   const [saving, setSaving] = useState(false);
   const [image, setImage] = useState({ imageUrl: "", imageFileId: "" });
@@ -66,23 +84,64 @@ export function ProductsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [productData, supplierData] = await Promise.all([
-        productApi.list(query ? { q: query } : undefined),
-        canManage ? supplierApi.list() : Promise.resolve({ suppliers: [] }),
-      ]);
+      const params = Object.fromEntries(
+        Object.entries({ ...filters, page }).filter(([, value]) => value !== ""),
+      );
+      const productData = await productApi.list(params);
       setProducts(productData.products || []);
-      setSuppliers(supplierData.suppliers || []);
+      setTotal(productData.total ?? productData.count ?? 0);
+      setLimit(productData.limit || 20);
     } catch (error) {
       toast.error(getApiError(error));
     } finally {
       setLoading(false);
     }
-  }, [canManage, query]);
+  }, [filters, page]);
 
   useEffect(() => {
     const timer = window.setTimeout(load, 250);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      productApi.categories(),
+      warehouseApi.list(),
+      user.role === "admin" ? supplierApi.list() : Promise.resolve({ suppliers: [] }),
+    ])
+      .then(([categoryData, warehouseData, supplierData]) => {
+        if (!active) return;
+        setCategories(categoryData.categories || []);
+        setWarehouses(warehouseData.warehouses || []);
+        setSuppliers(supplierData.suppliers || []);
+      })
+      .catch((error) => {
+        if (active) toast.error(getApiError(error));
+      });
+    return () => { active = false; };
+  }, [user.role]);
+
+  function updateFilter(event) {
+    setPage(1);
+    setFilters((current) => ({ ...current, [event.target.name]: event.target.value }));
+  }
+
+  async function searchSku(event) {
+    event.preventDefault();
+    const sku = skuQuery.trim();
+    if (!sku) return;
+    setSkuLoading(true);
+    setSkuProduct(null);
+    try {
+      const response = await productApi.bySku(sku);
+      setSkuProduct(response.product);
+    } catch (error) {
+      toast.error(getApiError(error));
+    } finally {
+      setSkuLoading(false);
+    }
+  }
 
   function openForm(product = null) {
     setModal(product ? { ...product } : { ...emptyProduct });
@@ -170,15 +229,15 @@ export function ProductsPage() {
       label: "Supplier",
       render: (product) => getName(product.supplier),
     },
-    ...(canManage
+    ...(canEdit
       ? [{
           key: "actions",
           label: "",
-          className: "w-24",
+          className: canDelete ? "w-24" : "w-12",
           render: (product) => (
             <div className="flex justify-end gap-1">
               <button onClick={() => openForm(product)} className="rounded-lg p-2 text-muted hover:bg-white/5 hover:text-copy" aria-label={`Edit ${product.name}`}><Edit3 size={14} /></button>
-              <button onClick={() => deleteProduct(product)} className="rounded-lg p-2 text-muted hover:bg-red-400/10 hover:text-red-300" aria-label={`Delete ${product.name}`}><Trash2 size={14} /></button>
+              {canDelete && <button onClick={() => deleteProduct(product)} className="rounded-lg p-2 text-muted hover:bg-red-400/10 hover:text-red-300" aria-label={`Delete ${product.name}`}><Trash2 size={14} /></button>}
             </div>
           ),
         }]
@@ -191,31 +250,100 @@ export function ProductsPage() {
         eyebrow="Catalog"
         title={user.role === "supplier" ? "My products" : "Products"}
         description={user.role === "supplier" ? "Products associated with your supplier account." : "Manage your product catalog and keep stock levels in view."}
-        actions={canManage && <Button onClick={() => openForm()}><Plus size={15} /> Add product</Button>}
+        actions={canEdit && <Button onClick={() => openForm()}><Plus size={15} /> Add product</Button>}
       />
+      {user.role === "salesRepresentative" && (
+        <Card className="mb-4 p-4 sm:p-5">
+          <form onSubmit={searchSku} className="flex flex-col gap-3 sm:flex-row">
+            <Field
+              label="Barcode / SKU lookup"
+              name="sku"
+              value={skuQuery}
+              onChange={(event) => setSkuQuery(event.target.value)}
+              placeholder="Scan or enter an exact SKU, then press Enter"
+              className="flex-1"
+            />
+            <Button type="submit" disabled={skuLoading || !skuQuery.trim()} className="self-end">
+              {skuLoading ? "Searching…" : "Find SKU"}
+            </Button>
+          </form>
+          {skuProduct && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-line pt-4">
+              <div className="flex items-center gap-3">
+                {skuProduct.imageUrl && <img src={skuProduct.imageUrl} alt="" className="h-12 w-12 object-cover" />}
+                <div>
+                  <p className="font-semibold">{skuProduct.name}</p>
+                  <p className="mt-1 text-xs text-muted">{skuProduct.sku} · {skuProduct.category}</p>
+                </div>
+              </div>
+              <p className="text-sm font-semibold">{formatCurrency(skuProduct.price)}</p>
+              <p className="text-sm">Available: <span className="font-semibold">{skuProduct.quantity}</span></p>
+            </div>
+          )}
+        </Card>
+      )}
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div>
             <p className="text-sm font-semibold text-copy">Product catalog</p>
-            <p className="mt-1 text-[11px] text-muted">{products.length} products found</p>
+            <p className="mt-1 text-[11px] text-muted">{total} products found</p>
           </div>
-          <label className="relative block w-full sm:max-w-[270px]">
+        </div>
+        <div className="grid gap-3 border-b border-line p-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+          <label className="relative block">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search name, SKU, category…"
-              className="h-10 w-full rounded-xl border border-line bg-ink/60 pl-9 pr-3 text-xs text-copy outline-none placeholder:text-muted/60 focus:border-orange/60"
+              name="q"
+              value={filters.q}
+              onChange={updateFilter}
+              placeholder="Search name, SKU…"
+              className="h-11 w-full border border-line bg-ink/60 pl-9 pr-3 text-xs text-copy outline-none placeholder:text-muted/60 focus:border-orange/60"
             />
           </label>
+          <Field as="select" aria-label="Filter by category" name="category" value={filters.category} onChange={updateFilter}>
+            <option value="">All categories</option>
+            {categories.map((category) => <option key={category}>{category}</option>)}
+          </Field>
+          {user.role === "admin" ? (
+            <Field as="select" aria-label="Filter by supplier" name="supplier" value={filters.supplier} onChange={updateFilter}>
+              <option value="">All suppliers</option>
+              {suppliers.map((supplier) => <option key={supplier._id} value={supplier._id}>{supplier.name}</option>)}
+            </Field>
+          ) : user.role !== "supplier" ? (
+            <Field aria-label="Filter by supplier ID" name="supplier" value={filters.supplier} onChange={updateFilter} placeholder="Supplier ID" />
+          ) : null}
+          <Field as="select" aria-label="Filter by warehouse" name="warehouse" value={filters.warehouse} onChange={updateFilter}>
+            <option value="">All warehouses</option>
+            {warehouses.map((warehouse) => <option key={warehouse._id} value={warehouse._id}>{warehouse.name}</option>)}
+          </Field>
+          <Field as="select" aria-label="Filter by availability" name="available" value={filters.available} onChange={updateFilter}>
+            <option value="">Any availability</option>
+            <option value="true">Available</option>
+            <option value="false">Unavailable</option>
+          </Field>
+          <Field aria-label="Minimum price" name="minPrice" type="number" min="0" value={filters.minPrice} onChange={updateFilter} placeholder="Min price" />
+          <Field aria-label="Maximum price" name="maxPrice" type="number" min="0" value={filters.maxPrice} onChange={updateFilter} placeholder="Max price" />
+          <Field as="select" aria-label="Sort products" name="sort" value={filters.sort} onChange={updateFilter}>
+            <option value="-createdAt">Newest</option>
+            <option value="price">Price: low to high</option>
+            <option value="-price">Price: high to low</option>
+            <option value="name">Name</option>
+          </Field>
         </div>
         <DataTable
           columns={columns}
           rows={products}
           loading={loading}
           emptyTitle="No products found"
-          emptyText={query ? "Try a different search term." : "Products added to the catalog will appear here."}
+          emptyText={filters.q ? "Try a different search term." : "Products added to the catalog will appear here."}
         />
+        <div className="flex items-center justify-between border-t border-line px-5 py-3 text-xs text-muted">
+          <span>{total.toLocaleString()} total · Page {page} of {Math.max(1, Math.ceil(total / limit))}</span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="secondary" disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)}>Previous</Button>
+            <Button size="sm" variant="secondary" disabled={page >= Math.max(1, Math.ceil(total / limit)) || loading} onClick={() => setPage((value) => value + 1)}>Next</Button>
+          </div>
+        </div>
       </Card>
 
       {modal && (

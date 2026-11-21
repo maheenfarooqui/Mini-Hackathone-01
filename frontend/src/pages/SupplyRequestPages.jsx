@@ -23,6 +23,7 @@ import {
 export function SupplyRequestsPage() {
   const { user } = useAuth();
   const isAdmin = user.role === "admin";
+  const canReview = isAdmin || user.role === "warehouseManager";
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
@@ -61,12 +62,12 @@ export function SupplyRequestsPage() {
 
   const columns = [
     { key: "product", label: "Product", render: (request) => <div><p className="font-medium">{getName(request.product)}</p><p className="mt-1 text-[10px] text-muted">{request.product?.sku}</p></div> },
-    ...(isAdmin ? [{ key: "supplier", label: "Supplier", render: (request) => <div><p>{getName(request.supplier)}</p><p className="mt-1 text-[10px] text-muted">{request.supplier?.email}</p></div> }] : []),
+    ...(canReview ? [{ key: "supplier", label: "Supplier", render: (request) => <div><p>{getName(request.supplier)}</p><p className="mt-1 text-[10px] text-muted">{request.supplier?.email}</p></div> }] : []),
     { key: "warehouse", label: "Delivery warehouse", render: (request) => <div><p>{getName(request.warehouse)}</p><p className="mt-1 text-[10px] text-muted">{request.warehouse?.location}</p></div> },
     { key: "quantity", label: "Quantity", render: (request) => <span className="font-semibold">{Number(request.quantity).toLocaleString()}</span> },
     { key: "createdAt", label: "Submitted", render: (request) => formatDate(request.createdAt) },
     { key: "status", label: "Status", render: (request) => <Badge>{request.status}</Badge> },
-    ...(isAdmin ? [{
+    ...(canReview ? [{
       key: "actions",
       label: "Review",
       className: "w-40",
@@ -83,9 +84,9 @@ export function SupplyRequestsPage() {
     <>
       <PageHeader
         eyebrow="Supply chain"
-        title={isAdmin ? "Supply requests" : "My supply requests"}
-        description={isAdmin ? "Review incoming product replenishment requests from suppliers." : "Track the status of your product replenishment requests."}
-        actions={!isAdmin && <Link to="/app/supply-requests/new"><Button><Plus size={15} /> New request</Button></Link>}
+        title={canReview ? "Supply requests" : "My supply requests"}
+        description={canReview ? "Review supplier requests. Approval adds the requested units to the destination warehouse." : "Track the status of your product replenishment requests."}
+        actions={!canReview && <Link to="/app/supply-requests/new"><Button><Plus size={15} /> New request</Button></Link>}
       />
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
@@ -95,7 +96,7 @@ export function SupplyRequestsPage() {
             {["Pending", "Approved", "Rejected"].map((item) => <option key={item} value={item}>{item}</option>)}
           </Field>
         </div>
-        <DataTable columns={columns} rows={requests} loading={loading} emptyTitle="No supply requests" emptyText={isAdmin ? "Requests submitted by suppliers will appear here." : "Create a request when your products need replenishing."} />
+        <DataTable columns={columns} rows={requests} loading={loading} emptyTitle="No supply requests" emptyText={canReview ? "Requests submitted by suppliers will appear here." : "Create a request when your products need replenishing."} />
       </Card>
       {review && (
         <Modal
@@ -106,7 +107,7 @@ export function SupplyRequestsPage() {
           <form onSubmit={submitReview} className="space-y-4">
             <div className={`rounded-xl border px-4 py-3 text-xs leading-5 ${review.status === "Approved" ? "border-emerald-300/20 bg-emerald-300/[0.06] text-emerald-100" : "border-red-300/20 bg-red-300/[0.06] text-red-100"}`}>
               {review.status === "Approved"
-                ? "Approving confirms the replenishment request. It does not automatically add stock."
+                ? "Approving adds the requested quantity to the selected warehouse and records the stock movement."
                 : "Rejecting closes this request. A note can explain the decision to the supplier."}
             </div>
             <Field label="Review note (optional)" name="reviewNote" as="textarea" rows={3} maxLength={500} placeholder="Add a note for the supplier" />
@@ -192,8 +193,8 @@ export function NewSupplyRequestPage() {
           <div className="mt-5 space-y-4">
             {[
               ["Submitted", "Your request is added to the shared supply queue."],
-              ["Reviewed", "An administrator approves or rejects the quantity."],
-              ["Fulfilled", "After approval, coordinate the shipment with the warehouse team."],
+              ["Reviewed", "An administrator or assigned warehouse manager approves or rejects the quantity."],
+              ["Fulfilled", "Approval adds the requested units to warehouse stock."],
             ].map(([title, copy], index) => (
               <div key={title} className="flex gap-3">
                 <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${index === 0 ? "bg-orange text-white" : "border border-line bg-card text-muted"}`}>{index + 1}</span>

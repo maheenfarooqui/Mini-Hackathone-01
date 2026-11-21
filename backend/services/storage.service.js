@@ -116,3 +116,22 @@ export async function deleteImageKitAsset(fileId) {
     }
   }
 }
+
+export async function cleanupImageKitAsset(fileId, deleteAsset = deleteImageKitAsset) {
+  if (!fileId) return;
+  try {
+    await deleteAsset(fileId);
+  } catch (error) {
+    console.error("ImageKit cleanup failed:", error.message);
+  }
+}
+
+export async function cleanupReplacedImageKitAsset(
+  oldFileId,
+  newFileId,
+  deleteAsset = deleteImageKitAsset,
+) {
+  if (oldFileId && oldFileId !== newFileId) {
+    await cleanupImageKitAsset(oldFileId, deleteAsset);
+  }
+}

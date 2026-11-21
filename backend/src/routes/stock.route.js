@@ -4,6 +4,7 @@ import {
   listLowStock,
   listStock,
   listTransactions,
+  transferStock,
 } from "../controllers/stock.controller.js";
 import {
   allowRoles,
@@ -22,6 +23,11 @@ router.post(
   "/out",
   allowRoles("admin", "warehouseManager"),
   (req, res) => changeStock(req, res, "stock-out"),
+);
+router.post(
+  "/transfer",
+  allowRoles("admin", "warehouseManager"),
+  transferStock,
 );
 router.get(
   "/low",

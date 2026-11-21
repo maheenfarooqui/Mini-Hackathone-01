@@ -27,6 +27,7 @@ export function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [busyId, setBusyId] = useState("");
+  const [invoiceDownloading, setInvoiceDownloading] = useState(false);
   const canProcess = user.role === "admin" || user.role === "warehouseManager";
 
   const load = useCallback(async () => {
@@ -72,6 +73,25 @@ export function OrdersPage() {
       toast.error(getApiError(error));
     } finally {
       setBusyId("");
+    }
+  }
+
+  async function downloadInvoice(order) {
+    setInvoiceDownloading(true);
+    try {
+      const invoice = await orderApi.invoice(order._id);
+      const url = URL.createObjectURL(invoice);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${order.orderNumber}-invoice.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      toast.error(getApiError(error));
+    } finally {
+      setInvoiceDownloading(false);
     }
   }
 
@@ -139,6 +159,11 @@ export function OrdersPage() {
           <div className="flex items-center justify-between border-t border-line pt-4 text-sm">
             <span className="text-muted">Order total</span><span className="font-semibold">{formatCurrency(selectedOrder.totalAmount)}</span>
           </div>
+          {selectedOrder.status === "Completed" && (
+            <Button className="mt-4 w-full" disabled={invoiceDownloading} onClick={() => downloadInvoice(selectedOrder)}>
+              {invoiceDownloading ? "Preparing invoice…" : "Download Invoice"}
+            </Button>
+          )}
         </Modal>
       )}
     </>

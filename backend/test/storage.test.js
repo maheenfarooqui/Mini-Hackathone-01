@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateImageKitFile } from "../services/storage.service.js";
+import {
+  cleanupImageKitAsset,
+  cleanupReplacedImageKitAsset,
+  validateImageKitFile,
+} from "../services/storage.service.js";
 
 const imageFile = {
   fileType: "image",
@@ -31,4 +35,31 @@ test("ImageKit image validation returns the canonical ImageKit URL", () => {
     imageUrl: imageFile.url,
     imageFileId: imageFile.fileId,
   });
+});
+
+test("replaced ImageKit files are cleaned up only when the file ID changes", async () => {
+  const deleted = [];
+  const deleteAsset = async (fileId) => deleted.push(fileId);
+
+  await cleanupReplacedImageKitAsset("old-file", "old-file", deleteAsset);
+  await cleanupReplacedImageKitAsset("old-file", "new-file", deleteAsset);
+  await cleanupReplacedImageKitAsset("", "new-file", deleteAsset);
+
+  assert.deepEqual(deleted, ["old-file"]);
+});
+
+test("ImageKit cleanup failures are logged and never reject", async () => {
+  const originalError = console.error;
+  const logged = [];
+  console.error = (...args) => logged.push(args);
+  try {
+    await assert.doesNotReject(
+      cleanupImageKitAsset("old-file", async () => {
+        throw new Error("ImageKit unavailable");
+      }),
+    );
+    assert.deepEqual(logged, [["ImageKit cleanup failed:", "ImageKit unavailable"]]);
+  } finally {
+    console.error = originalError;
+  }
 });

@@ -2,6 +2,7 @@ import userModel from "../models/user.model.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import { authCookieOptions, getJwtSecret } from "../utils/auth.js";
+import { logActivity } from "../utils/logActivity.js";
 
 const userResponse = (user) => ({
   id: user._id,
@@ -45,6 +46,8 @@ async function registerUser(req, res) {
       password: await bcrypt.hash(password, 12),
       role: "salesRepresentative",
     });
+    req.activityUserId = user._id;
+    await logActivity(req, "create", "user", user._id, { role: user.role });
     const token = jwt.sign({ id: user._id }, getJwtSecret(), {
       expiresIn: "7d",
     });
@@ -88,6 +91,8 @@ async function loginUser(req, res) {
       await user.save();
     }
 
+    req.activityUserId = user._id;
+    await logActivity(req, "login", "user", user._id, { role: user.role });
     const token = jwt.sign({ id: user._id }, getJwtSecret(), {
       expiresIn: "7d",
     });

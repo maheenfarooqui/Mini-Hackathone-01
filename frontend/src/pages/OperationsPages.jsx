@@ -13,6 +13,7 @@ import { stockApi } from "../api/stockApi.js";
 import { transactionApi } from "../api/transactionApi.js";
 import { warehouseApi } from "../api/warehouseApi.js";
 import { getApiError } from "../api/axios.js";
+import { useAuth } from "../context/AuthContext.jsx";
 import {
   Badge,
   Button,
@@ -26,20 +27,26 @@ import {
 } from "../components/UI.jsx";
 
 export function InventoryPage() {
+  const { user } = useAuth();
   const [stocks, setStocks] = useState([]);
+  const [products, setProducts] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [warehouse, setWarehouse] = useState("");
   const [loading, setLoading] = useState(true);
+  const [transferSaving, setTransferSaving] = useState(false);
+  const canTransfer = user.role === "admin" || user.role === "warehouseManager";
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [stockData, warehouseData] = await Promise.all([
+      const [stockData, warehouseData, productData] = await Promise.all([
         stockApi.list({ limit: 100, ...(warehouse ? { warehouse } : {}) }),
         warehouseApi.list(),
+        productApi.list({ limit: 100 }),
       ]);
       setStocks(stockData.stocks || []);
       setWarehouses(warehouseData.warehouses || []);
+      setProducts(productData.products || []);
     } catch (error) {
       toast.error(getApiError(error));
     } finally {
@@ -48,6 +55,23 @@ export function InventoryPage() {
   }, [warehouse]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function submitTransfer(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form).entries());
+    setTransferSaving(true);
+    try {
+      await stockApi.transfer({ ...values, quantity: Number(values.quantity) });
+      toast.success("Stock transferred successfully.");
+      form.reset();
+      await load();
+    } catch (error) {
+      toast.error(getApiError(error));
+    } finally {
+      setTransferSaving(false);
+    }
+  }
 
   const unitCount = stocks.reduce((total, stock) => total + Number(stock.quantity || 0), 0);
   const columns = [
@@ -88,6 +112,37 @@ export function InventoryPage() {
         <StatCard label="Units on hand" value={unitCount.toLocaleString()} note="Across visible locations" icon={Package} tone="green" />
         <StatCard label="Low stock records" value={stocks.filter((stock) => stock.quantity <= (stock.product?.lowStockLimit ?? -1)).length.toLocaleString()} note="At or below product threshold" icon={ArrowDownRight} tone="amber" />
       </div>
+      {canTransfer && (
+        <Card className="mb-5 p-5 sm:p-6">
+          <div className="mb-4">
+            <p className="text-sm font-semibold">Transfer between warehouses</p>
+            <p className="mt-1 text-[11px] text-muted">
+              Managers must have access to both the source and destination warehouses.
+            </p>
+          </div>
+          <form onSubmit={submitTransfer} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <Field label="Product" as="select" name="productId" required disabled={loading}>
+              <option value="">Select a product</option>
+              {products.map((product) => <option key={product._id} value={product._id}>{product.name} · {product.sku}</option>)}
+            </Field>
+            <Field label="From warehouse" as="select" name="fromWarehouseId" required disabled={loading}>
+              <option value="">Select source</option>
+              {warehouses.map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}
+            </Field>
+            <Field label="To warehouse" as="select" name="toWarehouseId" required disabled={loading}>
+              <option value="">Select destination</option>
+              {warehouses.map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}
+            </Field>
+            <Field label="Quantity" name="quantity" type="number" min="1" step="1" required />
+            <div className="flex items-end">
+              <Button type="submit" className="w-full" disabled={transferSaving || loading || products.length === 0 || warehouses.length < 2}>
+                {transferSaving ? "Transferring…" : "Transfer stock"}
+              </Button>
+            </div>
+            <Field label="Note (optional)" name="note" className="sm:col-span-2 xl:col-span-5" maxLength={500} placeholder="Add a transfer reference" />
+          </form>
+        </Card>
+      )}
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div><p className="text-sm font-semibold">Warehouse inventory</p><p className="mt-1 text-[11px] text-muted">{stocks.length} stock records loaded</p></div>

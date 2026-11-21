@@ -6,4 +6,5 @@ export const stockApi = {
     api.get("/api/stock/low", { params }).then((res) => res.data),
   add: (data) => api.post("/api/stock/in", data).then((res) => res.data),
   remove: (data) => api.post("/api/stock/out", data).then((res) => res.data),
+  transfer: (data) => api.post("/api/stock/transfer", data).then((res) => res.data),
 };

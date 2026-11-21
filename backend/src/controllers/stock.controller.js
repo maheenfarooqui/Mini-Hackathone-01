@@ -7,7 +7,14 @@ import {
   assignedWarehouseIds,
   getWarehouseForUser,
 } from "../utils/warehouseAccess.js";
+import { getAliasedField } from "../utils/requestFields.js";
+import { applyStockChange } from "../utils/stockService.js";
 import { isPositiveInteger } from "../utils/validation.js";
+import { logActivity } from "../utils/logActivity.js";
+import {
+  notifyLowStockAdmins,
+  resetLowStockNotificationIfRecovered,
+} from "../utils/lowStockMailer.js";
 
 function pagination(query) {
   const page = Math.max(1, Number.parseInt(query.page, 10) || 1);
@@ -16,7 +23,10 @@ function pagination(query) {
 }
 
 export async function changeStock(req, res, transactionType) {
-  const { productId, warehouseId, quantity, note = "" } = req.body || {};
+  const body = req.body || {};
+  const productId = getAliasedField(body, "productId", "product");
+  const warehouseId = getAliasedField(body, "warehouseId", "warehouse");
+  const { quantity, note = "" } = body;
 
   if (!["stock-in", "stock-out"].includes(transactionType)) {
     return res.status(400).json({ message: "Invalid stock movement type." });
@@ -46,41 +56,25 @@ export async function changeStock(req, res, transactionType) {
     session = await mongoose.startSession();
     let updatedStock;
     await session.withTransaction(async () => {
-      if (transactionType === "stock-in") {
-        updatedStock = await stockModel.findOneAndUpdate(
-          { product: productId, warehouse: warehouseId },
-          { $inc: { quantity: Number(quantity) } },
-          { new: true, upsert: true, setDefaultsOnInsert: true, session },
-        );
-      } else {
-        updatedStock = await stockModel.findOneAndUpdate(
-          {
-            product: productId,
-            warehouse: warehouseId,
-            quantity: { $gte: Number(quantity) },
-          },
-          { $inc: { quantity: -Number(quantity) } },
-          { new: true, session },
-        );
-
-        if (!updatedStock) {
-          throw new Error("INSUFFICIENT_STOCK");
-        }
-      }
-
-      await stockTransactionModel.create(
-        [
-          {
-            product: productId,
-            warehouse: warehouseId,
-            transactionType,
-            quantity: Number(quantity),
-            note: typeof note === "string" ? note.trim() : "",
-            performedBy: req.user.id,
-          },
-        ],
-        { session },
-      );
+      updatedStock = await applyStockChange({
+        productId,
+        warehouseId,
+        quantity,
+        type: transactionType,
+        note,
+        userId: req.user.id,
+        session,
+      });
+    });
+    if (transactionType === "stock-out") {
+      await notifyLowStockAdmins(productId);
+    } else {
+      await resetLowStockNotificationIfRecovered(productId);
+    }
+    await logActivity(req, transactionType, "stock", updatedStock._id, {
+      productId,
+      warehouseId,
+      quantity: Number(quantity),
     });
 
     return res.status(200).json({
@@ -90,11 +84,117 @@ export async function changeStock(req, res, transactionType) {
       stock: updatedStock,
     });
   } catch (error) {
-    if (error.message === "INSUFFICIENT_STOCK") {
+    if (error.message === "CAPACITY_EXCEEDED") {
+      return res.status(400).json({ message: "Warehouse capacity exceeded." });
+    }
+    if (error.message.startsWith("INSUFFICIENT_STOCK:")) {
       return res.status(400).json({ message: "Not enough stock is available." });
     }
     console.error("Change stock error:", error);
     return res.status(500).json({ message: "Unable to record the stock movement." });
+  } finally {
+    if (session) await session.endSession();
+  }
+}
+
+export async function transferStock(req, res) {
+  const body = req.body || {};
+  const {
+    productId,
+    fromWarehouseId,
+    toWarehouseId,
+    quantity,
+    note = "",
+  } = body;
+  if (
+    !mongoose.isValidObjectId(productId) ||
+    !mongoose.isValidObjectId(fromWarehouseId) ||
+    !mongoose.isValidObjectId(toWarehouseId)
+  ) {
+    return res.status(400).json({
+      message: "Valid productId, fromWarehouseId, and toWarehouseId are required.",
+    });
+  }
+  if (fromWarehouseId.toString() === toWarehouseId.toString()) {
+    return res.status(400).json({ message: "Source and destination warehouses must differ." });
+  }
+  if (!isPositiveInteger(quantity)) {
+    return res.status(400).json({ message: "Quantity must be a positive integer." });
+  }
+
+  let session;
+  try {
+    const [product, sourceResult, destinationResult] = await Promise.all([
+      productModel.findById(productId),
+      getWarehouseForUser(req.user, fromWarehouseId),
+      getWarehouseForUser(req.user, toWarehouseId),
+    ]);
+    if (!product) {
+      return res.status(404).json({ message: "Product not found." });
+    }
+    if (sourceResult.error) {
+      return res.status(sourceResult.status).json({ message: sourceResult.error });
+    }
+    if (destinationResult.error) {
+      return res.status(destinationResult.status).json({ message: destinationResult.error });
+    }
+
+    session = await mongoose.startSession();
+    let sourceStock;
+    let destinationStock;
+    await session.withTransaction(async () => {
+      sourceStock = await applyStockChange({
+        productId,
+        warehouseId: fromWarehouseId,
+        quantity,
+        type: "stock-out",
+        note: `Transfer to ${destinationResult.warehouse.name}`,
+        userId: req.user.id,
+        session,
+      });
+      destinationStock = await applyStockChange({
+        productId,
+        warehouseId: toWarehouseId,
+        quantity,
+        type: "stock-in",
+        note: `Transfer from ${sourceResult.warehouse.name}`,
+        userId: req.user.id,
+        session,
+      });
+    });
+
+    await Promise.all([
+      logActivity(req, "stock-out", "stock", sourceStock._id, {
+        productId,
+        fromWarehouseId,
+        toWarehouseId,
+        quantity: Number(quantity),
+        transfer: true,
+        note,
+      }),
+      logActivity(req, "stock-in", "stock", destinationStock._id, {
+        productId,
+        fromWarehouseId,
+        toWarehouseId,
+        quantity: Number(quantity),
+        transfer: true,
+        note,
+      }),
+    ]);
+    return res.status(200).json({
+      message: "Stock transferred successfully.",
+      fromStock: sourceStock,
+      toStock: destinationStock,
+    });
+  } catch (error) {
+    if (error.message.startsWith("INSUFFICIENT_STOCK:")) {
+      return res.status(400).json({ message: "Not enough stock is available at the source warehouse." });
+    }
+    if (error.message === "CAPACITY_EXCEEDED") {
+      return res.status(400).json({ message: "Destination warehouse capacity exceeded." });
+    }
+    console.error("Transfer stock error:", error);
+    return res.status(500).json({ message: "Unable to transfer stock." });
   } finally {
     if (session) await session.endSession();
   }

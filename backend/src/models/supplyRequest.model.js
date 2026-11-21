@@ -39,6 +39,10 @@ const supplyRequestSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    stockReceivedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true },
 );

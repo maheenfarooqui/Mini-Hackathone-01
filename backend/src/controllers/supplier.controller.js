@@ -3,8 +3,17 @@ import userModel from "../models/user.model.js";
 import productModel from "../models/product.model.js";
 import warehouseModel from "../models/warehouse.model.js";
 import supplyRequestModel from "../models/supplyRequest.model.js";
-import { verifyImageKitAsset } from "../../services/storage.service.js";
+import {
+  cleanupReplacedImageKitAsset,
+  verifyImageKitAsset,
+} from "../../services/storage.service.js";
+import { getWarehouseForUser } from "../utils/warehouseAccess.js";
+import { applyStockChange } from "../utils/stockService.js";
+import { getAliasedField } from "../utils/requestFields.js";
+import { supplyRequestFilterForUser } from "../utils/supplyRequestFilter.js";
 import { isPositiveInteger } from "../utils/validation.js";
+import { logActivity } from "../utils/logActivity.js";
+import { resetLowStockNotificationIfRecovered } from "../utils/lowStockMailer.js";
 
 export async function listSuppliers(req, res) {
   try {
@@ -50,6 +59,7 @@ export async function updateSupplierProfile(req, res) {
     if (!supplier) {
       return res.status(404).json({ message: "Supplier profile not found." });
     }
+    const oldFileId = supplier.imageFileId;
 
     if (body.name !== undefined) {
       if (typeof body.name !== "string" || !body.name.trim()) {
@@ -68,6 +78,8 @@ export async function updateSupplierProfile(req, res) {
     }
 
     await supplier.save();
+    cleanupReplacedImageKitAsset(oldFileId, supplier.imageFileId);
+    await logActivity(req, "update", "user", supplier._id, { profile: true });
     return res.status(200).json({
       message: "Supplier profile updated successfully.",
       supplier: await userModel
@@ -84,8 +96,7 @@ export async function updateSupplierProfile(req, res) {
 
 export async function listSupplyRequests(req, res) {
   try {
-    const filter =
-      req.user.role === "supplier" ? { supplier: req.user.id } : {};
+    const filter = supplyRequestFilterForUser(req.user);
     if (req.query.status) {
       if (!["Pending", "Approved", "Rejected"].includes(req.query.status)) {
         return res.status(400).json({ message: "Invalid supply request status." });
@@ -109,7 +120,10 @@ export async function listSupplyRequests(req, res) {
 
 export async function createSupplyRequest(req, res) {
   try {
-    const { productId, warehouseId, quantity } = req.body || {};
+    const body = req.body || {};
+    const productId = getAliasedField(body, "productId", "product");
+    const warehouseId = getAliasedField(body, "warehouseId", "warehouse");
+    const { quantity } = body;
     if (
       !mongoose.isValidObjectId(productId) ||
       !mongoose.isValidObjectId(warehouseId) ||
@@ -142,6 +156,11 @@ export async function createSupplyRequest(req, res) {
       warehouse: warehouse._id,
       quantity: Number(quantity),
     });
+    await logActivity(req, "create", "supply-request", request._id, {
+      productId: request.product,
+      warehouseId: request.warehouse,
+      quantity: request.quantity,
+    });
     return res.status(201).json({
       message: "Supply request submitted successfully.",
       request: await request.populate([
@@ -156,6 +175,7 @@ export async function createSupplyRequest(req, res) {
 }
 
 export async function reviewSupplyRequest(req, res) {
+  let session;
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({ message: "Invalid supply request ID." });
@@ -165,30 +185,68 @@ export async function reviewSupplyRequest(req, res) {
       return res.status(400).json({ message: "Status must be Approved or Rejected." });
     }
 
-    const request = await supplyRequestModel.findOneAndUpdate(
-      { _id: req.params.id, status: "Pending" },
-      {
-        $set: {
-          status,
-          reviewedBy: req.user.id,
-          reviewNote:
-            typeof reviewNote === "string" ? reviewNote.trim() : "",
+    session = await mongoose.startSession();
+    let updatedRequest;
+    await session.withTransaction(async () => {
+      const pendingRequest = await supplyRequestModel
+        .findOne({ _id: req.params.id, status: "Pending" })
+        .session(session);
+      if (!pendingRequest) {
+        const exists = await supplyRequestModel
+          .exists({ _id: req.params.id })
+          .session(session);
+        throw new Error(exists ? "SUPPLY_REQUEST_ALREADY_REVIEWED" : "SUPPLY_REQUEST_NOT_FOUND");
+      }
+
+      const warehouseResult = await getWarehouseForUser(
+        req.user,
+        pendingRequest.warehouse,
+      );
+      if (warehouseResult.error) {
+        const error = new Error(warehouseResult.error);
+        error.statusCode = warehouseResult.status;
+        throw error;
+      }
+
+      const stockReceivedAt = status === "Approved" ? new Date() : null;
+      updatedRequest = await supplyRequestModel.findOneAndUpdate(
+        { _id: req.params.id, status: "Pending" },
+        {
+          $set: {
+            status,
+            reviewedBy: req.user.id,
+            reviewNote:
+              typeof reviewNote === "string" ? reviewNote.trim() : "",
+            stockReceivedAt,
+          },
         },
-      },
-      { new: true },
-    );
-    if (!request) {
-      const exists = await supplyRequestModel.exists({ _id: req.params.id });
-      if (exists) {
-        return res.status(409).json({
-          message: "This supply request has already been reviewed.",
+        { new: true, session },
+      );
+      if (!updatedRequest) throw new Error("SUPPLY_REQUEST_ALREADY_REVIEWED");
+
+      if (status === "Approved") {
+        await applyStockChange({
+          productId: pendingRequest.product,
+          warehouseId: pendingRequest.warehouse,
+          quantity: pendingRequest.quantity,
+          type: "stock-in",
+          note: `Supply request ${pendingRequest._id}`,
+          userId: req.user.id,
+          session,
         });
       }
-      return res.status(404).json({ message: "Supply request not found." });
+    });
+
+    if (status === "Approved") {
+      await resetLowStockNotificationIfRecovered(updatedRequest.product);
     }
+    await logActivity(req, "supply-request.review", "supply-request", updatedRequest._id, {
+      status,
+      stockReceivedAt: updatedRequest.stockReceivedAt,
+    });
     return res.status(200).json({
       message: `Supply request ${status.toLowerCase()}.`,
-      request: await request.populate([
+      request: await updatedRequest.populate([
         { path: "supplier", select: "name email" },
         { path: "product", select: "name sku" },
         { path: "warehouse", select: "name location" },
@@ -196,7 +254,23 @@ export async function reviewSupplyRequest(req, res) {
       ]),
     });
   } catch (error) {
+    if (error.message === "CAPACITY_EXCEEDED") {
+      return res.status(400).json({ message: "Warehouse capacity exceeded." });
+    }
+    if (error.message === "SUPPLY_REQUEST_ALREADY_REVIEWED") {
+      return res.status(409).json({
+        message: "This supply request has already been reviewed.",
+      });
+    }
+    if (error.message === "SUPPLY_REQUEST_NOT_FOUND") {
+      return res.status(404).json({ message: "Supply request not found." });
+    }
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     console.error("Review supply request error:", error);
     return res.status(500).json({ message: "Unable to review supply request." });
+  } finally {
+    if (session) await session.endSession();
   }
 }

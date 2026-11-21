@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import User from "../src/models/user.model.js";
 import Product from "../src/models/product.model.js";
 import Stock from "../src/models/stock.model.js";
+import SupplyRequest from "../src/models/supplyRequest.model.js";
 
 test("user roles are limited to the four inventory roles", async () => {
   const invalidUser = new User({
@@ -43,4 +44,12 @@ test("warehouse stock cannot become negative or fractional", async () => {
 
   const error = await stock.validate().catch((validationError) => validationError);
   assert.ok(error.errors.quantity);
+  assert.equal(Stock.schema.path("lowStockNotifiedAt").instance, "Date");
+});
+
+test("supply requests track when approved stock was received", () => {
+  const receivedAt = new Date();
+  const request = new SupplyRequest({ stockReceivedAt: receivedAt });
+  assert.equal(request.stockReceivedAt.getTime(), receivedAt.getTime());
+  assert.equal(SupplyRequest.schema.path("stockReceivedAt").instance, "Date");
 });

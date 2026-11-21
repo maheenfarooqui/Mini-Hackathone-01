@@ -22,13 +22,14 @@ const SupplyRequestsPage = lazy(() => import("./pages/SupplyRequestPages.jsx").t
 const NewSupplyRequestPage = lazy(() => import("./pages/SupplyRequestPages.jsx").then((module) => ({ default: module.NewSupplyRequestPage })));
 const SupplierProfilePage = lazy(() => import("./pages/SupplyRequestPages.jsx").then((module) => ({ default: module.SupplierProfilePage })));
 const ProfilePage = lazy(() => import("./pages/ProfilePage.jsx"));
+const ActivityLogPage = lazy(() => import("./pages/ActivityLogPage.jsx"));
 
 const roles = {
   admin: ["admin"],
   manager: ["admin", "warehouseManager"],
   inventory: ["admin", "warehouseManager", "salesRepresentative"],
   orders: ["admin", "warehouseManager", "salesRepresentative"],
-  supplyRequests: ["admin", "supplier"],
+  supplyRequests: ["admin", "warehouseManager", "supplier"],
 };
 
 function AccessDeniedPage() {
@@ -71,6 +72,7 @@ export default function App() {
             <Route element={<ProtectedRoute roles={roles.admin} />}>
               <Route path="users" element={<UsersPage />} />
               <Route path="suppliers" element={<SuppliersPage />} />
+              <Route path="activity" element={<ActivityLogPage />} />
             </Route>
             <Route element={<ProtectedRoute roles={["admin", "warehouseManager", "supplier", "salesRepresentative"]} />}>
               <Route path="warehouses" element={<WarehousesPage />} />

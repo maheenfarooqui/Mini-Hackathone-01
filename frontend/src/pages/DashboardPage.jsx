@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Activity,
@@ -44,6 +44,8 @@ import {
   StatCard,
 } from "../components/UI.jsx";
 import toast from "react-hot-toast";
+
+const AdminReports = lazy(() => import("./AdminReports.jsx"));
 
 const chartTooltip = {
   contentStyle: {
@@ -215,6 +217,12 @@ export default function DashboardPage() {
               />
             ))}
           </div>
+
+          {user.role === "admin" && (
+            <Suspense fallback={<div className="mt-5 text-xs text-muted">Loading business reports…</div>}>
+              <AdminReports />
+            </Suspense>
+          )}
 
           <div className="mt-5 grid gap-4 xl:grid-cols-[1.4fr_0.85fr]">
             <Card className="p-5 sm:p-6">

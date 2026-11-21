@@ -9,8 +9,13 @@ import {
 } from "../controllers/auth.controller.js";
 
 import { verifyToken } from "../middlewares/auth.middleware.js";
+import rateLimit from "express-rate-limit";
 
 const router = express.Router();
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+});
 
 function googleOAuthRequired(req, res, next) {
   if (
@@ -25,8 +30,8 @@ function googleOAuthRequired(req, res, next) {
   return next();
 }
 
-router.post("/register", registerUser);
-router.post("/login", loginUser);
+router.post("/register", authRateLimit, registerUser);
+router.post("/login", authRateLimit, loginUser);
 router.post("/logout", logoutUser);
 router.get("/me", verifyToken, currentUser);
 router.get(

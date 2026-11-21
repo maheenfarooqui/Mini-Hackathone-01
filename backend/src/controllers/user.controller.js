@@ -6,7 +6,12 @@ import productModel from "../models/product.model.js";
 import orderModel from "../models/order.model.js";
 import stockTransactionModel from "../models/stockTransaction.model.js";
 import supplyRequestModel from "../models/supplyRequest.model.js";
-import { verifyImageKitAsset } from "../../services/storage.service.js";
+import {
+  cleanupImageKitAsset,
+  cleanupReplacedImageKitAsset,
+  verifyImageKitAsset,
+} from "../../services/storage.service.js";
+import { logActivity } from "../utils/logActivity.js";
 
 const roles = ["admin", "warehouseManager", "supplier", "salesRepresentative"];
 
@@ -76,6 +81,7 @@ export async function createUser(req, res) {
       password: await bcrypt.hash(password, 12),
       role,
     });
+    await logActivity(req, "create", "user", user._id, { role: user.role });
 
     return res.status(201).json({
       message: "User created successfully.",
@@ -164,6 +170,7 @@ export async function updateUser(req, res) {
     if (user.role !== "warehouseManager") user.assignedWarehouses = [];
 
     await user.save();
+    await logActivity(req, "update", "user", user._id, { role: user.role });
 
     await Warehouse.updateMany({ manager: user._id }, { $unset: { manager: 1 } });
     if (user.role === "warehouseManager" && user.assignedWarehouses.length) {
@@ -238,6 +245,8 @@ export async function deleteUser(req, res) {
 
     await Warehouse.updateMany({ manager: user._id }, { $unset: { manager: 1 } });
     await userModel.findByIdAndDelete(user._id);
+    cleanupImageKitAsset(user.imageFileId);
+    await logActivity(req, "delete", "user", user._id, { role: user.role });
     return res.status(200).json({ message: "User deleted successfully." });
   } catch (error) {
     console.error("Delete user error:", error);
@@ -252,6 +261,7 @@ export async function updateOwnProfile(req, res) {
     if (!user) {
       return res.status(404).json({ message: "User not found." });
     }
+    const oldFileId = user.imageFileId;
 
     if (body.name !== undefined) {
       if (typeof body.name !== "string" || !body.name.trim()) {
@@ -270,6 +280,8 @@ export async function updateOwnProfile(req, res) {
     }
 
     await user.save();
+    cleanupReplacedImageKitAsset(oldFileId, user.imageFileId);
+    await logActivity(req, "update", "user", user._id, { profile: true });
     return res.status(200).json({
       message: "Profile updated successfully.",
       user: await userModel.findById(user._id).select("-password -googleId"),

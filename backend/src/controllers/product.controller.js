@@ -5,12 +5,19 @@ import stockTransactionModel from "../models/stockTransaction.model.js";
 import userModel from "../models/user.model.js";
 import orderModel from "../models/order.model.js";
 import supplyRequestModel from "../models/supplyRequest.model.js";
-import { verifyImageKitAsset } from "../../services/storage.service.js";
+import {
+  cleanupImageKitAsset,
+  cleanupReplacedImageKitAsset,
+  verifyImageKitAsset,
+} from "../../services/storage.service.js";
 import { assignedWarehouseIds, hasWarehouseAccess } from "../utils/warehouseAccess.js";
 import {
   isNonNegativeInteger,
   isNonNegativeNumber,
 } from "../utils/validation.js";
+import { logActivity } from "../utils/logActivity.js";
+import { parseProductListOptions } from "../utils/productFilters.js";
+import { exactSkuPattern } from "../utils/productSku.js";
 
 async function validateSupplier(supplierId) {
   if (!supplierId) return { supplier: null };
@@ -29,23 +36,11 @@ async function validateSupplier(supplierId) {
 
 export async function listProducts(req, res) {
   try {
-    const filter = { sku: { $exists: true } };
-    if (req.user.role === "supplier") filter.supplier = req.user.id;
-    if (req.query.category) filter.category = req.query.category;
-    if (req.query.supplier && req.user.role === "admin") {
-      if (!mongoose.isValidObjectId(req.query.supplier)) {
-        return res.status(400).json({ message: "Invalid supplier ID." });
-      }
-      filter.supplier = req.query.supplier;
+    const options = parseProductListOptions(req.query, req.user);
+    if (options.error) {
+      return res.status(options.status).json({ message: options.error });
     }
-    if (req.query.q) {
-      const search = String(req.query.q).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      filter.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { sku: { $regex: search, $options: "i" } },
-        { category: { $regex: search, $options: "i" } },
-      ];
-    }
+    const { filter, available, sort, page, limit, skip } = options;
 
     let warehouseFilter;
     if (req.query.warehouse) {
@@ -63,12 +58,31 @@ export async function listProducts(req, res) {
       warehouseFilter = { $in: assignedWarehouseIds(req.user) };
     }
 
-    const products = await productModel
-      .find(filter)
-      .populate("supplier", "name email")
-      .sort({ createdAt: -1 })
-      .lean();
-    const stockFilter = { product: { $in: products.map((product) => product._id) } };
+    if (available !== undefined) {
+      const availableStockFilter = { quantity: { $gt: 0 } };
+      if (warehouseFilter) availableStockFilter.warehouse = warehouseFilter;
+      const stockedProductIds = await stockModel.distinct(
+        "product",
+        availableStockFilter,
+      );
+      filter._id = available === "true"
+        ? { $in: stockedProductIds }
+        : { $nin: stockedProductIds };
+    }
+
+    const [products, total] = await Promise.all([
+      productModel
+        .find(filter)
+        .populate("supplier", "name email")
+        .sort(sort)
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      productModel.countDocuments(filter),
+    ]);
+    const stockFilter = {
+      product: { $in: products.map((product) => product._id) },
+    };
     if (warehouseFilter) stockFilter.warehouse = warehouseFilter;
     const stocks = products.length && req.user.role !== "supplier"
       ? await stockModel
@@ -88,7 +102,7 @@ export async function listProducts(req, res) {
       stockByProduct.set(key, entry);
     }
 
-    let result = products.map((product) => {
+    const result = products.map((product) => {
       if (req.user.role === "supplier") return product;
       return {
         ...product,
@@ -96,14 +110,29 @@ export async function listProducts(req, res) {
         inventory: stockByProduct.get(product._id.toString())?.inventory || [],
       };
     });
-    if (req.query.available === "true") {
-      result = result.filter((product) => product.quantity > 0);
-    }
-
-    return res.status(200).json({ count: result.length, products: result });
+    return res.status(200).json({
+      count: total,
+      total,
+      page,
+      limit,
+      products: result,
+    });
   } catch (error) {
     console.error("List products error:", error);
     return res.status(500).json({ message: "Unable to fetch products." });
+  }
+}
+
+export async function listProductCategories(req, res) {
+  try {
+    const filter = { sku: { $exists: true } };
+    if (req.user.role === "supplier") filter.supplier = req.user.id;
+    const categories = await productModel.distinct("category", filter);
+    categories.sort((first, second) => first.localeCompare(second));
+    return res.status(200).json({ categories });
+  } catch (error) {
+    console.error("List product categories error:", error);
+    return res.status(500).json({ message: "Unable to fetch product categories." });
   }
 }
 
@@ -152,6 +181,48 @@ export async function getProduct(req, res) {
   }
 }
 
+export async function getProductBySku(req, res) {
+  try {
+    if (typeof req.params.sku !== "string" || !req.params.sku.trim()) {
+      return res.status(400).json({ message: "A valid SKU is required." });
+    }
+
+    const filter = { sku: exactSkuPattern(req.params.sku) };
+    if (req.user.role === "supplier") filter.supplier = req.user.id;
+    const product = await productModel
+      .findOne(filter)
+      .populate("supplier", "name email");
+    if (!product) {
+      return res.status(404).json({ message: "Product not found." });
+    }
+
+    const stocks = await stockModel
+      .find({ product: product._id })
+      .populate("warehouse", "name location");
+    const visibleStocks =
+      req.user.role === "warehouseManager"
+        ? stocks.filter((stock) =>
+            hasWarehouseAccess(req.user, stock.warehouse._id),
+          )
+        : req.user.role === "supplier"
+          ? []
+          : stocks;
+    const productResponse = product.toObject();
+    if (req.user.role !== "supplier") {
+      productResponse.quantity = visibleStocks.reduce(
+        (sum, stock) => sum + stock.quantity,
+        0,
+      );
+      productResponse.inventory = visibleStocks;
+    }
+
+    return res.status(200).json({ product: productResponse, stock: visibleStocks });
+  } catch (error) {
+    console.error("Find product by SKU error:", error);
+    return res.status(500).json({ message: "Unable to find product by SKU." });
+  }
+}
+
 export async function createProduct(req, res) {
   try {
     const body = req.body || {};
@@ -195,6 +266,7 @@ export async function createProduct(req, res) {
       createdBy: req.user.id,
       ...image,
     });
+    await logActivity(req, "create", "product", product._id, { sku: product.sku });
 
     return res.status(201).json({
       message: "Product created successfully.",
@@ -224,6 +296,7 @@ export async function updateProduct(req, res) {
     if (!product) {
       return res.status(404).json({ message: "Product not found." });
     }
+    const oldFileId = product.imageFileId;
 
     const { name, description, sku, category, price, lowStockLimit, supplier } =
       body;
@@ -277,6 +350,8 @@ export async function updateProduct(req, res) {
     }
 
     await product.save();
+    cleanupReplacedImageKitAsset(oldFileId, product.imageFileId);
+    await logActivity(req, "update", "product", product._id, { sku: product.sku });
     return res.status(200).json({
       message: "Product updated successfully.",
       product,
@@ -318,6 +393,8 @@ export async function deleteProduct(req, res) {
     }
 
     await productModel.findByIdAndDelete(product._id);
+    cleanupImageKitAsset(product.imageFileId);
+    await logActivity(req, "delete", "product", product._id, { sku: product.sku });
     return res.status(200).json({ message: "Product deleted successfully." });
   } catch (error) {
     console.error("Delete product error:", error);

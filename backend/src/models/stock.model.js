@@ -18,6 +18,10 @@ const stockSchema = new mongoose.Schema(
       default: 0,
       validate: Number.isInteger,
     },
+    lowStockNotifiedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true },
 );
